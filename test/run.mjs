@@ -28,7 +28,7 @@ page.on('pageerror', e => log('  [pageerror]', e.message));
 await page.route('**/api/config', r => r.fulfill({ json: { supabaseUrl: SB, supabaseAnonKey: 'anon' } }));
 let coachCalls = 0;
 await page.route('**/api/coach', async r => {
-  coachCalls++; const body = r.request().postDataJSON();
+  coachCalls++; const body = r.request().postDataJSON(); if (JSON.stringify(body.contents).includes('inlineData')) imgCalls++;
   const last = body.contents[body.contents.length - 1];
   const fr = last.parts[0].functionResponse;
   if (fr && fr.name === 'web_search') { const src = fr.response.result.sources; const call = { name: 'save_research', args: { topic: 'Creatine and hair loss', area: 'appearance', summary: 'One small 2009 study saw a DHT rise; no study has shown hair loss.', confidence: 'low', sources: src } }; return r.fulfill({ json: { parts: [{ functionCall: call }], calls: [call], text: '' } }); }
@@ -38,7 +38,8 @@ await page.route('**/api/coach', async r => {
   if (body.tools && body.tools.length && /ate/i.test(JSON.stringify(last))) return r.fulfill({ json: { parts: [{ functionCall: { name: 'log_food', args: { items: [{ name: 'Chicken breast', grams: 200, kcal: 330, protein: 62, carbs: 0, fat: 7 }] } } }], calls: [{ name: 'log_food', args: { items: [{ name: 'Chicken breast', grams: 200, kcal: 330, protein: 62, carbs: 0, fat: 7 }] } }], text: '' } });
   return r.fulfill({ json: { parts: [{ text: 'Summary: talked about sleep.' }], calls: [], text: 'Summary: talked about sleep.' } });
 });
-let searchTools = [], searchQ = '';
+let searchTools = [], searchQ = '', imgCalls = 0;
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC', 'base64');
 await page.route('**/api/search', r => { searchQ = r.request().postDataJSON().query; return r.fulfill({ json: { answer: 'No good evidence that creatine causes hair loss.', sources: [{ title: 'pubmed.ncbi.nlm.nih.gov', url: 'https://pubmed.ncbi.nlm.nih.gov/19741313/' }], searchedAt: new Date().toISOString() } }); });
 await page.route('**/api/voice-token', r => r.fulfill({ json: { token: 'auth_tokens/test123', model: 'gemini-3.8-live' } }));
 await page.route(SB + '/**', async r => {
@@ -64,6 +65,7 @@ await page.routeWebSocket(/generativelanguage\.googleapis\.com/, ws => {
     if (m.setup) { live.setup = m.setup; (live.setups = live.setups || []).push(m.setup); send({ setupComplete: {} }); return; }
     if (m.clientContent) { live.clientContent++; send({ serverContent: { outputTranscription: { text: 'Hey Nathan, what\'s going on?' } } }); send({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data: Buffer.alloc(24000 * 2 * 0.6).toString('base64') } }] } } }); send({ serverContent: { turnComplete: true } }); return; }
     if (m.realtimeInput && m.realtimeInput.audio) { live.audioFrames++; return; }
+    if (m.realtimeInput && m.realtimeInput.video) { live.video = (live.video || 0) + 1; return; }
     if (m.toolResponse) { live.toolResponses.push(m.toolResponse); send({ serverContent: { outputTranscription: { text: 'Done, logged two hundred grams of chicken.' } } }); send({ serverContent: { turnComplete: true } }); return; }
   });
 });
@@ -91,6 +93,11 @@ ok(searchTools.includes('web_search') && searchTools.includes('save_research'), 
 ok(/creatine/i.test(searchQ), 'coach searched the internet (server endpoint)');
 const brainDoc = store.get('brain'); ok(brainDoc && JSON.stringify(brainDoc.body).includes('Creatine and hair loss') && JSON.stringify(brainDoc.body).includes('pubmed'), 'research note with source saved to the knowledge base');
 ok(/Saved that research/.test(await page.locator('#chat').innerText()), 'coach confirmed after the save');
+
+const before = imgCalls;
+await page.setInputFiles('#coach-photo', { name: 'me.png', mimeType: 'image/png', buffer: PNG }); await page.waitForTimeout(800);
+await page.fill('#coach-in', 'what should I work on in this physique photo'); await page.click('[data-a=send]'); await page.waitForTimeout(2500);
+ok(imgCalls > before, 'photo sent in chat reaches the AI as an image');
 
 log('3. Live voice call');
 await page.evaluate(() => { location.hash = 'talk'; }); await page.waitForTimeout(600);
@@ -148,6 +155,10 @@ live.ws.send(JSON.stringify({ toolCall: { functionCalls: [{ id: 'fc3', name: 'co
 await page.waitForTimeout(1500);
 const out3 = live.toolResponses[2] && live.toolResponses[2].functionResponses[0].response.output; log('   confirm result:', JSON.stringify(out3).slice(0, 200));
 ok(out3 && out3.ok && out3.applied.includes('done'), 'spoken "yes" applies the change');
+
+// show the coach a photo mid-call
+await page.setInputFiles('#vc-photo', { name: 'me.png', mimeType: 'image/png', buffer: PNG }); await page.waitForTimeout(1200);
+ok(live.video >= 1, 'photo shown during the call reaches the live coach');
 
 // hand the call to the trainer: new voice, new name, same call
 const nSetups = live.setups.length;

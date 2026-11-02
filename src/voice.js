@@ -353,7 +353,7 @@ function stateBody() {
     ? `<button class="vc-go" data-a="vcStart">${SF.I.mic}<span>${s === 'ended' ? 'Call again' : 'Talk to ' + coachName()}</span></button>`
     : s === 'error' ? `<button class="vc-go" data-a="vcStart">${SF.I.mic}<span>${C.errCode === 'closed' ? 'Reconnect' : 'Try again'}</span></button>`
     : s === 'paused' ? `<div class="vc-ctl"><button class="vc-go" data-a="vcResume"><span>Resume</span></button><button class="vc-end" data-a="vcEnd" aria-label="End call">End</button></div>`
-    : `<div class="vc-ctl"><button class="vc-mute ${C.muted ? 'on' : ''}" data-a="vcMute" aria-pressed="${C.muted}" aria-label="${C.muted ? 'Unmute' : 'Mute'}">${C.muted ? 'Unmute' : 'Mute'}</button><button class="vc-end" data-a="vcEnd" aria-label="End call">End</button></div>`;
+    : `<div class="vc-ctl"><label class="vc-cam" for="vc-photo" aria-label="Show the coach a photo">${SF.I.cam || SF.I.image || 'Photo'}</label><input type="file" id="vc-photo" accept="image/*" hidden data-vc-photo="1"><button class="vc-mute ${C.muted ? 'on' : ''}" data-a="vcMute" aria-pressed="${C.muted}" aria-label="${C.muted ? 'Unmute' : 'Mute'}">${C.muted ? 'Unmute' : 'Mute'}</button><button class="vc-end" data-a="vcEnd" aria-label="End call">End</button></div>`;
   return { live, caption, main };
 }
 function view() {
@@ -385,6 +385,27 @@ function paint() {
   const tx = $('#vc-tx'); if (tx) tx.scrollTop = tx.scrollHeight;
   if (!C.raf && C.ctx) loop();
 }
+
+/* ---------- show the coach a photo mid-call ---------- */
+function shrink(file, max = 1024) {
+  return new Promise((res, rej) => {
+    const url = URL.createObjectURL(file); const im = new Image();
+    im.onload = () => { const k = Math.min(1, max / Math.max(im.width, im.height)); const c = document.createElement('canvas'); c.width = Math.round(im.width * k); c.height = Math.round(im.height * k); c.getContext('2d').drawImage(im, 0, 0, c.width, c.height); URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.85).split(',')[1]); };
+    im.onerror = () => { URL.revokeObjectURL(url); rej(new Error('That photo could not be read.')); };
+    im.src = url;
+  });
+}
+async function sendPhoto(file) {
+  if (!C.session) return;
+  try {
+    const data = await shrink(file);
+    C.session.sendRealtimeInput({ video: { data, mimeType: 'image/jpeg' } });
+    C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: '(Nathan just showed you a photo of himself on camera. Look closely and tell him honestly what you see in your lane: physique and weak points to bring up, or skin, puffiness, grooming and which haircut or beard would suit his face. Describe only what is visible, name lighting or angle limits, never diagnose, and offer to look up anything with web_search.)' }] }], turnComplete: true });
+    C.lines.push({ who: 'you', text: '[showed a photo]' }); SF.chatLog(C.agent).push({ role: 'me', text: '[Photo shown on the call]', ts: Date.now(), voice: true });
+    RT && RT.audit('voice', 'photo_shown', { agent: C.agent }); setState('thinking');
+  } catch (e) { SF.toast((e && e.message) || 'Could not send the photo.'); }
+}
+document.addEventListener('change', (e) => { const el = e.target; if (el && el.dataset && el.dataset.vcPhoto && el.files && el.files[0]) { sendPhoto(el.files[0]); el.value = ''; } });
 
 /* ---------- your team: names and voices ---------- */
 function teamPanel() {
@@ -419,6 +440,7 @@ const css = document.createElement('style');
 css.textContent = `
 .vc{display:flex;flex-direction:column;gap:14px;min-height:calc(100dvh - 150px);padding-bottom:12px}
 .vc-stage{display:grid;place-items:center;padding:8px 0}
+.vc-cam{display:grid;place-items:center;width:64px;min-height:64px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:#fff;cursor:pointer;flex:0 0 auto}.vc-cam svg{width:24px;height:24px}
 .vc-team-btn{align-self:center;color:#8DBBFF;min-height:44px}
 .vc-team{display:grid;gap:12px}.vc-team h2{margin:0}
 .vc-tm{display:grid;grid-template-columns:40px 1fr 1fr;gap:10px;align-items:end}
