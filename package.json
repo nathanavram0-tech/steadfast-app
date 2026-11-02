@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
-    "test": "node test/token.mjs && node test/run.mjs"
+    "test": "node test/token.mjs && node test/search.mjs && node test/run.mjs"
   },
   "dependencies": {
     "@google/genai": "2.32.0",
