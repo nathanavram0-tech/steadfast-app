@@ -1,7 +1,7 @@
 // Setup check: tells you which settings are missing and whether the AI models are reachable.
 import { GoogleGenAI } from '@google/genai';
 import { send, TEXT_MODEL, LIVE_MODEL, env, missingEnv } from './_lib.js';
-import { grounded, searchModels } from './_search.js';
+import { research, backupSearch, searchModels } from './_search.js';
 
 export default async function handler(req, res) {
   const missing = missingEnv(['GEMINI_API_KEY', 'SUPABASE_URL', 'SUPABASE_ANON_KEY']);
@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
   if (!missing.length && req.query && req.query.search === '1') {
     // Runs one real web search so problems show up with their exact error (no secrets in the output).
-    try { const r = await grounded('Who won the most recent Super Bowl?'); out.search = { ok: true, model: r.model, answer: r.answer.slice(0, 200), sources: r.sources.length, failedFirst: r.attempts }; }
+    try { const q = 'Who won the most recent Super Bowl?'; const r = req.query.backup === '1' ? await backupSearch(q) : await research(q); out.search = { ok: true, model: r.model, usedBackup: !!r.fallback || req.query.backup === '1', answer: r.answer.slice(0, 200), sources: r.sources.length, failedFirst: r.attempts }; }
     catch (e) { out.search = { ok: false, tried: searchModels(), attempts: e.attempts || String(e.message) }; }
   }
   if (!missing.length && req.query && req.query.vision === '1') {

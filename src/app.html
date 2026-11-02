@@ -1684,7 +1684,9 @@ SHEETS.photo=()=>{const p=(PHOTOS||[]).find(x=>x.id===SH.id);if(!p)return sheetH
   const cmp=SH.cmp&&(PHOTOS||[]).find(x=>x.id===SH.cmp);const a=p.analysis;
   const an=ANALYZING.has(p.id)?`<p class="note">Analyzing…</p>`:a?`<div class="stack an" style="gap:8px"><p class="note" style="margin:0"><b>${esc(a.summary||'')}</b></p>
     ${a.areas?`<div class="an-grid">${Object.entries(a.areas).filter(([k,v])=>v&&!/^not visible/i.test(v)).map(([k,v])=>`<div><span class="eyebrow">${esc(k)}</span><p>${esc(v)}</p></div>`).join('')}</div>`:''}
-    ${['skin','puffiness','grooming','face_shape','hair'].filter(k=>a[k]).map(k=>`<div><span class="eyebrow">${k==='face_shape'?'face shape':k==='hair'?'hair & beard ideas':k}</span><p class="small" style="margin:2px 0 0">${esc(a[k])}</p></div>`).join('')}
+    ${[['holding_back','What\'s holding you back most'],['build_first','Build these first']].filter(([k])=>Array.isArray(a[k])&&a[k].length).map(([k,l])=>`<div><span class="eyebrow">${l}</span><ol class="small" style="margin:4px 0 0;padding-left:20px">${a[k].slice(0,4).map(x=>`<li>${esc(String(x))}</li>`).join('')}</ol></div>`).join('')}
+    ${a.left_right?`<div><span class="eyebrow">Left vs right</span><p class="small" style="margin:2px 0 0">${esc(a.left_right)}</p></div>`:''}
+    ${['leanness','skin','puffiness','grooming','face_shape','hair'].filter(k=>a[k]).map(k=>`<div><span class="eyebrow">${k==='face_shape'?'face shape':k==='hair'?'hair & beard ideas':k==='leanness'?'face fat vs bloat':k}</span><p class="small" style="margin:2px 0 0">${esc(a[k])}</p></div>`).join('')}
     ${a.vs_previous?`<div><span class="eyebrow">Vs previous</span><p class="small" style="margin:2px 0 0">${esc(a.vs_previous)}</p></div>`:''}
     ${(a.focus||a.tips||[]).length?`<div><span class="eyebrow">${a.focus?'Focus':'Tips'}</span><ul class="small" style="margin:4px 0 0;padding-left:18px">${(a.focus||a.tips).map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
     ${a.bodyfat_range?`<span class="tiny muted">Body fat from a photo, rough range: ${esc(a.bodyfat_range)}</span>`:''}
@@ -2276,15 +2278,19 @@ async function analyzePhoto(id,quiet){
     const imgs=[dataUrlToBlob(p.img)];if(prev)imgs.push(dataUrlToBlob(prev.img));
     let prompt;
     if(p.type==='face')prompt=`You are the appearance coach in Nathan's app Steadfast. Image 1 is his face photo from ${p.date}.${prev?` Image 2 is his previous face photo from ${prev.date}.`:''}
-Describe only what is visible, honestly and kindly: skin (texture, redness, breakouts, dryness or oiliness as it appears), how puffy the face looks (temporary water vs leanness), grooming (hair, beard, brows), and presentation. Lighting and camera angle change how skin and puffiness look; say so when it limits you. Never diagnose a medical or skin condition; if something looks like it needs a professional, say "worth showing a dermatologist". Only suggest well-supported basics (daily sunscreen, gentle cleanser, moisturizer, consistent sleep, steady sodium and water, not picking). No facial exercises, supplements or treatments without strong evidence.
-Reply with only JSON: {"summary":"2 sentences","skin":"...","puffiness":"...","grooming":"...","vs_previous":"what changed since image 2, or empty","face_shape":"as it appears (oval, round, square, oblong, heart, diamond) or unclear","hair":"1-2 haircut and beard styles that usually suit that face shape and his current length, as suggestions","tips":["up to 3 specific, evidence-based"],"limits":"what a photo can't tell","see_pro":false}`;
+${LOOK_SPEC.face}
+Describe only what is visible. Lighting and camera angle change how skin and puffiness look; say so when it limits you.
+Reply with only JSON: {"summary":"2 sentences","holding_back":["ranked 1-3: the issue + the lever"],"leanness":"face fat vs water/bloat as it appears","skin":"...","puffiness":"...","grooming":"...","vs_previous":"what changed since image 2, or empty","face_shape":"as it appears (oval, round, square, oblong, heart, diamond) or unclear","hair":"1-2 haircut and beard styles that usually suit that face shape and his current length","tips":["up to 3 specific, evidence-based"],"limits":"what a photo can't tell","see_pro":false}`;
     else prompt=`You are the physique coach in Nathan's app Steadfast. Nathan: 20, 6'4", ${cur?r1(cur)+' lb (7-day avg)':S.core.profile.lb+' lb'}, ${S.core.profile.exp} years lifting, lean bulk aiming for +${S.core.goal.gain} lb with controlled fat.
 Image 1: his ${pose} progress photo from ${p.date}.${prev?` Image 2: his previous ${pose} photo from ${prev.date}.`:' No earlier photo of this pose yet.'}
-Be honest and specific about what is visible: shoulders, chest, arms, back, legs, core leanness, symmetry, posture. Only rate what this pose shows; say "not visible" otherwise. Lighting, pump, angle, distance and time of day change how a body looks, so compare carefully and name those limits. Body fat from a photo is a rough range. Name the 1-3 areas that most need bringing up (for example side delts, upper chest, calves) and the kind of training emphasis that usually helps each (for example more weekly sets for lateral raises), but do not overhaul his program or change nutrition from one photo.
-Reply with only JSON: {"summary":"2 sentences","areas":{"shoulders":"","chest":"","arms":"","back":"","legs":"","core":""},"vs_previous":"what changed since image 2, or empty","focus":["up to 3 areas to bring up, each with the training emphasis that usually helps"],"bodyfat_range":"e.g. 9-11%","photo_tips":"how to make the next photo more comparable","limits":"what a photo can't tell"}`;
+${LOOK_SPEC.physique}
+Only rate what this pose shows; use null for anything not visible. Lighting, pump, angle, distance and time of day change how a body looks, so compare carefully and name those limits. Body fat from a photo is a rough range.
+Scores are 1-10 relative to a lean, athletic natural physique.${prev&&prev.analysis&&prev.analysis.scores?` His previous ${pose} photo scored ${JSON.stringify(prev.analysis.scores)}; stay consistent with that scale so changes are real, and only move a score when you can see a change.`:''}
+Reply with only JSON: {"summary":"2 sentences","areas":{"shoulders":"","chest":"","arms":"","back":"","legs":"","core":""},"left_right":"visible size or shape differences between his left and right side (his left, not the viewer's), or none visible","build_first":["ranked: muscle + the training emphasis that usually helps"],"vs_previous":"what changed since image 2, or empty","focus":["up to 3 areas to bring up, each with the training emphasis that usually helps"],"bodyfat_range":"e.g. 9-11%","scores":{"shoulders":n,"chest":n,"arm_left":n,"arm_right":n,"back":n,"core_leanness":n,"legs":n,"calves":n},"photo_tips":"how to make the next photo more comparable","limits":"what a photo can't tell"}`;
     const r=await sample.json(prompt,{images:imgs,cache:false});
     p.analysis={at:Date.now(),vs:prev?prev.id:null,...(r&&typeof r==='object'?r:{summary:String(r||'')})};
     if(typeof p.analysis.summary!=='string')p.analysis.summary=String(p.analysis.summary||'');
+    if(p.analysis.scores&&typeof p.analysis.scores==='object'){const sc={};Object.entries(p.analysis.scores).forEach(([k,v])=>{const n=+v;if(v!=null&&n>=1&&n<=10)sc[k]=r1(n)});p.analysis.scores=sc}
     p.updatedAt=Date.now();await savePhotoDoc(p);photoIndexSync();
     logEvent(p.type==='face'?'face':'body',`${p.type==='face'?'Face':'Progress'} photo (${pose}, ${shortDate(p.date)}) analyzed: ${p.analysis.summary}`,{date:p.date,src:'ai'});
     if(!quiet)toast('Photo analyzed');
@@ -2530,6 +2536,15 @@ function applyJournal(section,fields,text,say,k=TODAY){
   saveJ(k);say&&say(`Saved ${section} journal${k!==TODAY?' ('+shortDate(k)+')':''}`);return{ok:true};
 }
 
+/* ---------- What a photo review must cover (shared by chat, calls and saved photos) ---------- */
+const LOOK_SPEC={
+  physique:'PHYSIQUE REVIEW. Go muscle by muscle for whatever is visible: delts (front, side, rear), chest (upper, lower), biceps, triceps, forearms, lats and upper back, traps, abs and obliques, quads, hamstrings, glutes, calves. Compare his LEFT vs RIGHT for every pair (his left, not the viewer\'s) and call out any visible size or shape difference, like one bicep or one pec looking bigger. Judge proportions (shoulder-to-waist taper, upper vs lower body, arms vs torso), posture (rounded shoulders, uneven shoulders, pelvic tilt), definition and a rough body-fat range. Then RANK the muscles he should build most, from most lagging to least (top 3-4), and for each give the training emphasis that usually helps (for example 6-10 more weekly sets of lateral raises for side delts, or unilateral work for an imbalance). Never overhaul his whole program from one photo.',
+  face:'FACE AND LOOKS REVIEW (he wants to look like a model, so be direct and specific, not flattering). Cover: facial leanness (does the face look like it is holding fat, or temporary water/bloat: puffy under-eyes, soft jaw edge, swollen cheeks; how sharp the jawline and cheekbones read), skin (tone and evenness, redness, sallowness or dullness as it appears in this lighting, texture and pores, breakouts or marks, dryness or shine, under-eye darkness), hair (length, density, hairline as visible, and 1-2 haircuts that usually suit his face shape), brows, beard or stubble, teeth and lips if visible, and posture of the head and neck. Name his face shape. Then answer plainly WHAT IS HOLDING HIM BACK MOST, ranked 1-3, picking from: body fat, water and bloat, skin, haircut and grooming, posture, sleep. For each give the lever: for fat, a slow lean-out or a cleaner bulk; for bloat, steady sodium, potassium, water, sleep and little alcohol; for skin, daily sunscreen, a gentle cleanser, moisturizer, and a dermatologist for anything persistent; for grooming, the cut, beard and brows. Bone structure can\'t be changed by habits; say so honestly when it applies. Jaw or face exercises and mewing have weak evidence; do not promote them. Never suggest crash dieting, water cutting or diuretics, and never diagnose a skin condition.',
+};
+function lookSpec(agent){return agent==='trainer'?LOOK_SPEC.physique:agent==='glow'?LOOK_SPEC.face:'If the photo shows his body: '+LOOK_SPEC.physique+'\nIf it shows his face: '+LOOK_SPEC.face}
+/* Phone photos can be several MB; shrink to a clear JPEG so they always fit the request. */
+async function chatImage(f){try{return dataUrlToBlob(await shrinkImage(f))}catch(e){return f}}
+
 /* ---------- Chat ---------- */
 let BUSY=null;
 function chatLog(k){k=k||UI.agent||'main';if(k==='main')return S.chat||(S.chat=[]);S.chats=S.chats||{};return S.chats[k]||(S.chats[k]=[])}
@@ -2558,12 +2573,13 @@ async function coachSend(text,files){
   const hist=log.slice(0,-1).filter(m=>!m.err&&m.text).slice(-16);
   const voice=UI.route==='talk',deep=!!UI.deep&&!voice;
   const turns=[{role:'user',content:agentPrompt()+COACH_RULES+coachContext()+teamNotes()+(voice?'\n\nVOICE MODE: your reply is spoken out loud on a call. Talk like a person on the phone: 1-3 short sentences, no lists, no bold, no symbols, numbers said naturally. Offer more instead of reading it all. Still use lookup when the question needs data.':'')+(deep?'\n\nRESEARCH MODE (Nathan asked for a deep answer): take your time. Pull every relevant record with lookup (trends, habits, history, research notes). Reason step by step, compare options, weigh evidence (systematic reviews and meta-analyses > RCTs > observational > expert opinion), state limitations and confidence, separate strong from emerging evidence. Cite only sources that are in the knowledge base; otherwise say the evidence is from general knowledge and could be checked. End with a clear recommendation and what to track. Headings and lists are fine here.':'')+'\n\nThe conversation follows. Reply to the last message.'}];
-  hist.forEach((m,i)=>turns.push({role:m.role==='me'?'user':'assistant',content:(m.text||'(photo)')+(m.img?'\n[Nathan attached '+m.img+' photo'+(m.img>1?'s':'')+(i===hist.length-1?' — see the first images.':' earlier.')+']':'')+(i===hist.length-1&&auto.length?`\n[Attached automatically from his photo history so you can see them: ${auto.map((p,k)=>`image ${Math.min(files.length,maxImg)+k+1} = ${p.type} ${p.pose||''} photo from ${p.date}`).join('; ')}. Compare carefully and name lighting, angle and pump limits.]`:'')}));
+  hist.forEach((m,i)=>turns.push({role:m.role==='me'?'user':'assistant',content:(m.text||'(photo)')+(m.img?'\n[Nathan attached '+m.img+' photo'+(m.img>1?'s':'')+(i===hist.length-1?'. They are included in this message as images and you CAN see them. Look at them and analyze them directly yourself. Never say you can\'t see, view or analyze photos. Answer his question first, then give the review.\n'+lookSpec(agent)+']':' earlier.]'):'')+(i===hist.length-1&&auto.length?`\n[Attached automatically from his photo history so you can see them: ${auto.map((p,k)=>`image ${Math.min(files.length,maxImg)+k+1} = ${p.type} ${p.pose||''} photo from ${p.date}`).join('; ')}. Compare carefully and name lighting, angle and pump limits.]`:'')}));
   const ctl=new AbortController();BUSY=ctl;setThinking(true);
   const opts={signal:ctl.signal,tools:coachTools(msg),onText:({text})=>{msg.text=text;msg.pending=false;setThinking(false);if(!ttsOn())pulseTalk();paintChat(true);ttsFeed(text)}};
   if(deep)opts.modelTier='complex';
   if(!(LIMITS&&LIMITS.tools))delete opts.tools;
-  const imgs=[...(maxImg?files.slice(0,maxImg):[]),...auto.map(p=>dataUrlToBlob(p.img))];
+  const sent=maxImg?await Promise.all(files.slice(0,maxImg).map(chatImage)):[];
+  const imgs=[...sent,...auto.map(p=>dataUrlToBlob(p.img))];
   if(imgs.length){if(maxImg)opts.images=imgs.slice(0,maxImg);else if(files.length)msg.acts.push('Photos can’t be sent from this view')}
   try{const r=await sample(turns,opts);msg.text=r.text;if(r.truncated)msg.text+='\n\n(Cut short. Ask me to continue.)';ttsFeed(r.text,true)}
   catch(e){msg.text=(e&&e.text)||'';if(!(e&&e.code==='cancelled')){msg.err=!msg.text;msg.text=(msg.text?msg.text+'\n\n':'')+aiErr(e)}}
@@ -2571,7 +2587,7 @@ async function coachSend(text,files){
     if((msg.acts||[]).length){const B=brain();B.actions.push({t:Date.now(),agent:AGENTS[agent].name,acts:msg.acts.slice(0,10)});B.actions=B.actions.slice(-80);touchQuiet('brain')}
     saveChat();if(UI.route==='coach')render();else paintChat();paintTalk()}
 }
-function saveChatPhotos(files,type){Promise.all(files.slice(0,3).map(f=>shrinkImage(f).then(img=>addPhoto(type,img,TODAY,'other',true)))).then(()=>toast(`Saved to your ${type==='face'?'face':'progress'} photos`)).catch(()=>{})}
+function saveChatPhotos(files,type){Promise.all(files.slice(0,3).map(f=>shrinkImage(f).then(img=>addPhoto(type,img,TODAY,type==='face'?'face':'other')))).then(()=>toast(`Saved to your ${type==='face'?'face':'progress'} photos`)).catch(()=>{})}
 function actsHtml(m){
   const ic=I.check.replace('width="24" height="24"','width="13" height="13"');
   const acts=(m.acts||[]).length?`<div class="acts">${m.acts.map(a=>`<span>${ic} ${esc(a)}</span>`).join('')}</div>`:'';

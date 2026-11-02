@@ -56,7 +56,7 @@ const VOICE_RULES = `
 LIVE VOICE CALL: you are on a live, hands-free voice call with Nathan. Talk like a real coach on the phone: relaxed, direct, warm. Usually 1-3 short sentences, then let him talk. Ask one sharp question when you need more info before advising. Never read lists out loud; give the top one or two things and offer more. Say numbers naturally ("about two hundred grams"). No markdown or symbols. If he interrupts, drop your point and answer the new thing. Remember everything said earlier in this call.
 DATA: before answering about his numbers, call lookup. Say whether something is logged, an estimate, or not logged. Never invent data.
 TEAM: you are one of Nathan's coaches, each with their own name and voice, all sharing the same data, memory and tools. Use your own name. If he asks for another coach, or the topic is clearly their lane and he agrees, call switch_coach.
-PHOTOS: you can see photos he shows you on the call (they arrive as a camera image). Never say you can't see or analyze photos; if none arrived, ask him to tap the camera button and send it again.
+PHOTOS: you can see photos he shows you on the call. When he sends one, a full analysis of it reaches you a few seconds later in a message that starts "(Nathan just showed you a photo". Until it arrives, say something like "Give me a sec, looking at it now". Never say you can't see, view or analyze photos yourself, and never tell him to use another app for it. If no photo arrived, ask him to tap the camera button and send it again.
 RESEARCH: for facts you are not sure of (food values, studies, products, prices, rules, news), say "let me look that up", call web_search, then give the exact answer first and briefly say where it came from. Never guess. If he asks you to learn or remember a finding, call save_research with the sources.
 ACTIONS: you can change Steadfast with your tools while you talk. Only say something is saved after the tool result says it was saved. When a tool says a change needs his confirmation, tell him briefly what will change and ask "want me to do it?" When he clearly says yes, call confirm_pending with decision "confirm"; if no, "cancel".`;
 
@@ -410,15 +410,13 @@ function shrink(file, max = 1024) {
     im.src = url;
   });
 }
-const LOOK = {
-  trainer: 'physique: go muscle by muscle (delts front/side/rear, chest upper/lower, biceps, triceps, forearms, lats and upper back, traps, abs and obliques, quads, hamstrings, glutes, calves) for whatever is visible; compare LEFT vs RIGHT for every pair and call out any visible size or shape difference (for example one bicep or one pec looking bigger); proportions (shoulder-to-waist, upper vs lower body), posture (rounded shoulders, pelvic tilt, uneven shoulders), definition and rough body-fat range; then the 1-3 areas that most need bringing up and the training emphasis that usually helps (for example unilateral work for an imbalance)',
-  glow: 'face and grooming: skin tone and evenness (any redness, sallowness, uneven tone or dullness, as it appears in this lighting), texture and pores, breakouts or marks, dryness or shine, under-eye darkness or puffiness, facial puffiness overall, face shape, jawline, hair (length, density, hairline as visible), beard and brows, teeth and lips if visible; then the top 2-3 things to improve first and 1-2 haircut or beard styles that usually suit that face shape',
-};
 async function sendPhoto(file) {
   if (!C.session) return;
   const agent = C.agent;
   C.lines.push({ who: 'you', text: '[showed a photo]' }); SF.chatLog(agent).push({ role: 'me', text: '[Photo shown on the call]', ts: Date.now(), voice: true });
   setState('thinking', ''); C.coachLine = ''; C.photoNote = 'Looking at your photo…'; paint();
+  // Tell the coach right away, so it never answers "I can't see photos" while the analysis runs.
+  try { C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: '(Nathan just sent you a photo. Your analysis of it arrives in a few seconds. If he talks before then, say you are looking at it now. Never say you cannot see or analyze it.)' }] }], turnComplete: false }); } catch (x) {}
   try {
     const data = await shrink(file);
     // Live calls can't reliably take still images, so the app's vision model looks at the photo
@@ -426,10 +424,18 @@ async function sendPhoto(file) {
     const sample = await SF.getSample();
     if (!sample) throw new Error('Photo analysis is not available right now.');
     const blob = await (await fetch('data:image/jpeg;base64,' + data)).blob();
-    const focus = LOOK[agent] || 'whatever the photo shows: if it is his physique, cover ' + LOOK.trainer + '; if it is his face, cover ' + LOOK.glow;
-    const r = await sample(`You are looking at a photo Nathan (20, 6'4", lean bulking, lifting 3-4 years) just showed his coach during a voice call. Describe precisely what is visible and assess ${focus}. Be honest and specific, describe only what you can see, say when lighting, angle or pump limits what you can tell, never diagnose a medical or skin condition, and keep it under 260 words of plain text. Be specific and direct like a top coach: name exact areas and sides, not generalities.`, { images: [blob], cache: false });
-    const seen = String((r && r.text) || '').trim();
+    const r = await sample(`You are an expert coach looking at a photo Nathan (20, 6'4", lean bulking, lifting 3-4 years) just showed his ${agent === 'glow' ? 'glow-up coach' : agent === 'trainer' ? 'personal trainer' : 'head coach'} on a voice call, asking what he needs to work on. First line exactly "KIND: physique" or "KIND: face" or "KIND: other". Then the review, written as the coach's notes.
+${SF.lookSpec(agent)}
+Be honest, specific and direct like a top coach: name exact muscles and sides and rank priorities, no generalities and no flattery. Describe only what you can see, and say when lighting, angle or pump limits what you can tell. Plain text, under 350 words.`, { images: [blob], cache: false });
+    const raw = String((r && r.text) || '').trim();
+    const kind = ((raw.match(/^\s*KIND:\s*(physique|face|other)/i) || [])[1] || '').toLowerCase();
+    const seen = raw.replace(/^\s*KIND:[^\n]*\n?/i, '').trim();
     if (!seen) throw new Error('Could not read that photo.');
+    if (/can.?t (see|view|analy[sz]e)|unable to (see|view|analy[sz]e)/i.test(seen.slice(0, 160))) throw new Error('the vision model declined to review it. Try a clearer, well-lit photo');
+    // Keep it for progress tracking too (physique -> progress photos, face -> face photos), analyzed in the background.
+    if ((kind === 'physique' || kind === 'face') && SF.addPhoto && SF.shrinkImage) {
+      SF.shrinkImage(file).then(img => SF.addPhoto(kind === 'face' ? 'face' : 'progress', img, SF.TODAY, kind === 'face' ? 'face' : 'other')).catch(() => {});
+    }
     if (!C.session) return;
     C.photoNote = '';
     C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: `(Nathan just showed you a photo on the call. You can see it; this is exactly what is in it: """${seen}""". Talk to him about it as yourself, out loud, as if you are looking at it: the most important things you see in your lane and what to work on first. Keep it conversational, 3-5 sentences, then ask what he wants to focus on. Don't mention a description or another model.)` }] }], turnComplete: true });

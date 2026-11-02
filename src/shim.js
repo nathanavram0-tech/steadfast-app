@@ -113,7 +113,13 @@ async function webSearch(query) {
   try { r = await fetch('/api/search', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ query }) }); }
   catch (e) { return { error: 'No connection, so I could not search.' }; }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) return { error: j.message || 'Search failed.' };
+  if (!r.ok) {
+    const why = j.message || ('Search failed (HTTP ' + r.status + (r.status === 504 ? ', timed out' : '') + ').');
+    // Show the exact reason on screen so a failure can be screenshotted and fixed, not guessed at.
+    try { window.SF && window.SF.toast(why.slice(0, 160)); } catch (e) {}
+    window.SteadfastRuntime && window.SteadfastRuntime.audit && window.SteadfastRuntime.audit('search', 'failed', { why: why.slice(0, 400) });
+    return { error: why + ' Tell Nathan the exact reason in one line; do not say the tool is down in general.' };
+  }
   return { answer: j.answer, sources: j.sources, searchedAt: j.searchedAt, note: 'Answer from a live web search. Give the exact answer first, mention where it came from, and say if the evidence is weak. Do not add facts the sources do not support.' };
 }
 function transferTool() {

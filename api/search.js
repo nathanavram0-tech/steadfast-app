@@ -1,7 +1,7 @@
 // Internet research: answers one question using Google Search grounding, and returns the sources it used.
 // The coaches call this through their web_search tool. The Gemini key never leaves the server.
 import { send, readJson, requireUser, missingEnv } from './_lib.js';
-import { grounded } from './_search.js';
+import { research } from './_search.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { code: 'method' });
@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   const q = String(b.query || '').trim().slice(0, 1000);
   if (!q) return send(res, 400, { code: 'empty', message: 'No question.' });
   try {
-    const r = await grounded(q);
+    const r = await research(q);
     return send(res, 200, { ...r, searchedAt: new Date().toISOString() });
   } catch (e) {
     const at = e.attempts || [];

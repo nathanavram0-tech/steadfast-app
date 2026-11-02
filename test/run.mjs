@@ -28,7 +28,7 @@ page.on('pageerror', e => log('  [pageerror]', e.message));
 await page.route('**/api/config', r => r.fulfill({ json: { supabaseUrl: SB, supabaseAnonKey: 'anon' } }));
 let coachCalls = 0;
 await page.route('**/api/coach', async r => {
-  coachCalls++; const body = r.request().postDataJSON(); if (JSON.stringify(body.contents).includes('inlineData')) imgCalls++;
+  coachCalls++; const body = r.request().postDataJSON(); if (JSON.stringify(body.contents).includes('inlineData')) { imgCalls++; imgText = JSON.stringify(body.contents); }
   const last = body.contents[body.contents.length - 1];
   const fr = last.parts[0].functionResponse;
   if (fr && fr.name === 'transfer_to_coach') return r.fulfill({ json: { parts: [{ text: "That's Jay's area, sending you over." }], calls: [], text: "That's Jay's area, sending you over." } });
@@ -40,7 +40,7 @@ await page.route('**/api/coach', async r => {
   if (body.tools && body.tools.length && /ate/i.test(JSON.stringify(last))) return r.fulfill({ json: { parts: [{ functionCall: { name: 'log_food', args: { items: [{ name: 'Chicken breast', grams: 200, kcal: 330, protein: 62, carbs: 0, fat: 7 }] } } }], calls: [{ name: 'log_food', args: { items: [{ name: 'Chicken breast', grams: 200, kcal: 330, protein: 62, carbs: 0, fat: 7 }] } }], text: '' } });
   return r.fulfill({ json: { parts: [{ text: 'Summary: talked about sleep.' }], calls: [], text: 'Summary: talked about sleep.' } });
 });
-let searchTools = [], searchQ = '', imgCalls = 0, transferSys = '', fuelGotIt = false;
+let imgText = '', searchTools = [], searchQ = '', imgCalls = 0, transferSys = '', fuelGotIt = false;
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC', 'base64');
 await page.route('**/api/search', r => { searchQ = r.request().postDataJSON().query; return r.fulfill({ json: { answer: 'No good evidence that creatine causes hair loss.', sources: [{ title: 'pubmed.ncbi.nlm.nih.gov', url: 'https://pubmed.ncbi.nlm.nih.gov/19741313/' }], searchedAt: new Date().toISOString() } }); });
 await page.route('**/api/voice-token', r => r.fulfill({ json: { token: 'auth_tokens/test123', model: 'gemini-3.8-live' } }));
@@ -65,7 +65,7 @@ await page.routeWebSocket(/generativelanguage\.googleapis\.com/, ws => {
   ws.onMessage(raw => {
     const m = JSON.parse(String(raw));
     if (m.setup) { live.setup = m.setup; (live.setups = live.setups || []).push(m.setup); send({ setupComplete: {} }); return; }
-    if (m.clientContent) { live.clientContent++; live.lastClient = JSON.stringify(m.clientContent); send({ serverContent: { outputTranscription: { text: 'Hey Nathan, what\'s going on?' } } }); send({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data: Buffer.alloc(24000 * 2 * 0.6).toString('base64') } }] } } }); send({ serverContent: { turnComplete: true } }); return; }
+    if (m.clientContent) { live.clientContent++; live.lastClient = JSON.stringify(m.clientContent); live.allClient = (live.allClient || '') + live.lastClient; send({ serverContent: { outputTranscription: { text: 'Hey Nathan, what\'s going on?' } } }); send({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data: Buffer.alloc(24000 * 2 * 0.6).toString('base64') } }] } } }); send({ serverContent: { turnComplete: true } }); return; }
     if (m.realtimeInput && m.realtimeInput.audio) { live.audioFrames++; return; }
     if (m.realtimeInput && m.realtimeInput.video) { live.video = (live.video || 0) + 1; return; }
     if (m.toolResponse) { live.toolResponses.push(m.toolResponse); send({ serverContent: { outputTranscription: { text: 'Done, logged two hundred grams of chicken.' } } }); send({ serverContent: { turnComplete: true } }); return; }
@@ -100,6 +100,8 @@ const before = imgCalls;
 await page.setInputFiles('#coach-photo', { name: 'me.png', mimeType: 'image/png', buffer: PNG }); await page.waitForTimeout(800);
 await page.fill('#coach-in', 'what should I work on in this physique photo'); await page.click('[data-a=send]'); await page.waitForTimeout(2500);
 ok(imgCalls > before, 'photo sent in chat reaches the AI as an image');
+ok(/you CAN see them/.test(imgText) && /LEFT vs RIGHT/.test(imgText) && /RANK the muscles/.test(imgText) && /HOLDING HIM BACK MOST/.test(imgText), 'chat photo comes with the full physique and face review instructions');
+ok(/"mimeType":"image\/jpeg"/.test(imgText), 'chat photo is shrunk to a JPEG before sending (fits the upload limit)');
 
 // specialists stay in their lane and transfer
 await page.evaluate(() => { location.hash = 'coach/trainer'; }); await page.waitForTimeout(600);
@@ -170,6 +172,8 @@ ok(out3 && out3.ok && out3.applied.includes('done'), 'spoken "yes" applies the c
 const imgBefore = imgCalls;
 await page.setInputFiles('#vc-photo', { name: 'me.png', mimeType: 'image/png', buffer: PNG }); await page.waitForTimeout(2500);
 ok(imgCalls > imgBefore, 'photo shown on the call is looked at by the vision model');
+ok(/KIND: physique/.test(imgText) && /RANK the muscles/.test(imgText), 'call photo gets the ranked muscle-by-muscle review');
+ok(/arrives in a few seconds/.test(live.clients ? live.clients.join(' ') : live.allClient || ''), 'coach is told right away a photo is being analyzed');
 ok(/showed you a photo/.test(live.lastClient || '') && /talked about sleep/.test(live.lastClient || ''), 'live coach receives what is in the photo and talks about it');
 
 // hand the call to the trainer: new voice, new name, same call
