@@ -1,7 +1,7 @@
 // Grounded web search with model fallback: if one model can't use Google Search right now
 // (quota, not supported, outage), the next one is tried.
 import { GoogleGenAI } from '@google/genai';
-import { TEXT_MODEL, env, errCode } from './_lib.js';
+import { TEXT_MODEL, env, errCode, generateWithFallback } from './_lib.js';
 
 const RULES = `You are a careful research assistant for Nathan's personal coaching app.
 Search the web and answer the question directly and precisely. Lead with the exact answer (a number, a date, a yes/no), then 2-5 short supporting points.
@@ -102,21 +102,18 @@ export async function backupSearch(q) {
   const sources = list.slice(0, 8).map((r, i) => ({ title: r.title || r.url, url: r.url, text: i < top.length && texts[i].status === 'fulfilled' ? texts[i].value : r.snippet }));
   const ctx = sources.map((s, i) => `[${i + 1}] ${s.title}\n${s.url}\n${(s.text || '').slice(0, 5000)}`).join('\n\n');
   const ai = new GoogleGenAI({ apiKey: env('GEMINI_API_KEY') });
-  const attempts = [];
-  for (const model of [...new Set([TEXT_MODEL(), 'gemini-2.5-flash', 'gemini-flash-latest'])]) {
-    try {
-      const r = await timeout(ai.models.generateContent({ model, contents: [{ role: 'user', parts: [{ text: `Today is ${new Date().toISOString().slice(0, 10)}.\nQuestion: ${q}\n\nWeb pages found just now:\n${ctx}\n\nAnswer the question using ONLY these pages. Cite them like [1], [2]. If they don't answer it, say what they do show and that you couldn't confirm the rest.` }] }], config: { systemInstruction: RULES, temperature: 0.2 } }), 20000, model);
-      const text = String(r.text || '').trim();
-      if (text) return { answer: text, sources: sources.map(({ title, url }) => ({ title, url })), queries: [q], model: 'web+' + model, attempts };
-      attempts.push({ model, error: 'empty answer' });
-    } catch (e) { attempts.push({ model, error: String((e && e.message) || e).slice(0, 200) }); }
-  }
-  const err = new Error('backup answer failed'); err.attempts = attempts; throw err;
+  try {
+    const { r, model, tried } = await timeout(generateWithFallback(ai, { contents: [{ role: 'user', parts: [{ text: `Today is ${new Date().toISOString().slice(0, 10)}.\nQuestion: ${q}\n\nWeb pages found just now:\n${ctx}\n\nAnswer the question using ONLY these pages. Cite them like [1], [2]. If they don't answer it, say what they do show and that you couldn't confirm the rest.` }] }], config: { systemInstruction: RULES, temperature: 0.2 } }), 30000, 'answer');
+    const text = String(r.text || '').trim();
+    if (!text) { const err = new Error('empty answer'); err.attempts = tried; throw err; }
+    return { answer: text, sources: sources.map(({ title, url }) => ({ title, url })), queries: [q], model: 'web+' + model, attempts: tried };
+  } catch (e) { const err = new Error('backup answer failed'); err.attempts = e.attempts || e.tried || [{ model: 'answer', code: errCode(e), error: String(e.message).slice(0, 200) }]; throw err; }
 }
 /* Google-grounded first; if that fails, the backup path. */
 export async function research(q) {
   let first = [];
-  try { return await grounded(q); } catch (e) { first = e.attempts || [{ model: 'grounded', error: String(e.message) }]; }
+  if (env('GEMINI_SEARCH_GROUNDING', '') !== '1') first = [{ model: 'google-search', error: 'off (not on the free tier; set GEMINI_SEARCH_GROUNDING=1 with a paid key)' }];
+  else try { return await grounded(q); } catch (e) { first = e.attempts || [{ model: 'grounded', error: String(e.message) }]; }
   try { const r = await backupSearch(q); r.attempts = [...first, ...(r.attempts || [])]; r.fallback = true; return r; }
   catch (e) { const err = new Error('All search paths failed'); err.attempts = [...first, ...(e.attempts || [{ model: 'web', error: String(e.message) }])]; throw err; }
 }

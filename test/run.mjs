@@ -173,6 +173,7 @@ ok(out3 && out3.ok && out3.applied.includes('done'), 'spoken "yes" applies the c
 const imgBefore = imgCalls;
 await page.setInputFiles('#vc-photo', { name: 'me.png', mimeType: 'image/png', buffer: PNG }); await page.waitForTimeout(2500);
 ok(imgCalls > imgBefore, 'photo shown on the call is looked at by the vision model');
+ok(await page.locator('.vc-shot img').count() === 1, 'the photo shows on the call screen while it is reviewed');
 ok(/KIND: physique/.test(imgText) && /RANK the muscles/.test(imgText), 'call photo gets the ranked muscle-by-muscle review');
 ok(/arrives in a few seconds/.test(live.clients ? live.clients.join(' ') : live.allClient || ''), 'coach is told right away a photo is being analyzed');
 ok(/showed you a photo/.test(live.lastClient || '') && /talked about sleep/.test(live.lastClient || ''), 'live coach receives what is in the photo and talks about it');

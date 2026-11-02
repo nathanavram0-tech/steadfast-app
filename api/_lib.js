@@ -3,6 +3,31 @@ export const env = (k, d) => process.env[k] || d;
 export const TEXT_MODEL = () => env('GEMINI_TEXT_MODEL', 'gemini-3.8-flash');
 export const LIVE_MODEL = () => env('GEMINI_LIVE_MODEL', 'gemini-3.8-live');
 
+// Free-tier limits are per model, so when one model is out of quota (429) or gone (404),
+// the next one answers instead. Models that just hit their limit are skipped for 10 minutes.
+const DEFAULT_FALLBACKS = 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite';
+export const textModels = (first) => [...new Set([first || TEXT_MODEL(), ...env('GEMINI_FALLBACK_MODELS', DEFAULT_FALLBACKS).split(',').map(s => s.trim()).filter(Boolean)])];
+const cooling = new Map();
+const signatureFree = (contents) => JSON.parse(JSON.stringify(contents), (k, v) => (k === 'thoughtSignature' ? 'skip_thought_signature_validator' : v));
+export async function generateWithFallback(ai, req, { first, onSkip } = {}) {
+  const tried = [];
+  const models = textModels(first);
+  const ready = models.filter(m => !(cooling.get(m) > Date.now()));
+  for (const model of (ready.length ? ready : models)) {
+    try {
+      const r = await ai.models.generateContent({ ...req, model, contents: tried.length ? signatureFree(req.contents) : req.contents });
+      return { r, model, tried };
+    } catch (e) {
+      const code = errCode(e);
+      tried.push({ model, code, error: String((e && e.message) || e).slice(0, 160) });
+      if (code === 'rate_limited') cooling.set(model, Date.now() + 10 * 60 * 1000);
+      if (code !== 'rate_limited' && code !== 'model_not_found' && !/503|UNAVAILABLE|overloaded/i.test(String(e && e.message))) { e.tried = tried; throw e; }
+      onSkip && onSkip(model, code);
+    }
+  }
+  const err = new Error('Every AI model is out of free quota right now.'); err.tried = tried; err.code = 'rate_limited'; throw err;
+}
+
 export function send(res, code, obj) {
   res.statusCode = code;
   res.setHeader('Content-Type', 'application/json');

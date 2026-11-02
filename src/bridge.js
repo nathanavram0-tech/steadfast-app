@@ -4,7 +4,7 @@ window.SF = {
   AG, esc, render, go, toast, chatLog, saveChat, touch, pname, TEAM, coachSend,
   coachTools: (m) => [...coachTools(m), ...((window.SteadfastRuntime && window.SteadfastRuntime.extraTools) ? window.SteadfastRuntime.extraTools() : [])], coachContext, agentPrompt, teamNotes, teamSwitch,
   agentAvatar, actsHtml, mdLite, brain, logEvent, touchQuiet, getSample,
-  LOOK_SPEC, lookSpec, addPhoto, shrinkImage, dataUrlToBlob, get TODAY() { return TODAY; },
+  LOOK_SPEC, lookSpec, addPhoto, addPhotoReviewed, shrinkImage, dataUrlToBlob, get TODAY() { return TODAY; },
   async verifySaved() {
     for (let i = 0; i < 50 && Sync.busy; i++) await new Promise(r => setTimeout(r, 100));
     await flush();

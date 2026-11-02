@@ -881,6 +881,8 @@ async function addPhoto(type,img,date,pose,noAnalyze){
   logEvent(type==='face'?'face':'body',`${type==='face'?'Face':'Progress'} photo added (${p.pose}, ${shortDate(date)})`,{date});
   if(!noAnalyze)setTimeout(()=>analyzePhoto(p.id),50);return p;
 }
+/* Save a photo that already has a review (from a call), so it isn't analyzed twice. */
+async function addPhotoReviewed(type,img,date,pose,an){const p=await addPhoto(type,img,date,pose,true);p.analysis={at:Date.now(),...an};p.updatedAt=Date.now();await savePhotoDoc(p);photoIndexSync();return p}
 async function delPhoto(id){
   const old=(PHOTOS||[]).find(p=>p.id===id);if(Sync.mode==='cloud')await col().doc(id).delete();if(old)logEvent(old.type==='face'?'face':'body',`Deleted ${old.type} photo (${old.pose||'other'}, ${shortDate(old.date)})`,{date:old.date});
   PHOTOS=(PHOTOS||[]).filter(p=>p.id!==id);
@@ -1694,7 +1696,7 @@ SHEETS.text=()=>`${sheetHead(SH.title)}<label class="field"><span>${SH.label}</s
 SHEETS.photo=()=>{const p=(PHOTOS||[]).find(x=>x.id===SH.id);if(!p)return sheetHead('Photo');
   const same=(PHOTOS||[]).filter(x=>x.id!==p.id&&x.type===p.type&&(x.pose||'other')===(p.pose||'other')).sort((a,b)=>a.date<b.date?1:-1);
   const cmp=SH.cmp&&(PHOTOS||[]).find(x=>x.id===SH.cmp);const a=p.analysis;
-  const an=ANALYZING.has(p.id)?`<p class="note">Analyzing…</p>`:a?`<div class="stack an" style="gap:8px"><p class="note" style="margin:0"><b>${esc(a.summary||'')}</b></p>
+  const an=ANALYZING.has(p.id)?`<p class="note">Analyzing…</p>`:a?`<div class="stack an" style="gap:8px"><p class="note" style="margin:0"><b>${esc(a.summary||'')}</b></p>${a.review?`<div class="small" style="white-space:pre-wrap;line-height:1.45">${esc(a.review)}</div>`:''}
     ${a.areas?`<div class="an-grid">${Object.entries(a.areas).filter(([k,v])=>v&&!/^not visible/i.test(v)).map(([k,v])=>`<div><span class="eyebrow">${esc(k)}</span><p>${esc(v)}</p></div>`).join('')}</div>`:''}
     ${[['holding_back','What\'s holding you back most'],['build_first','Build these first']].filter(([k])=>Array.isArray(a[k])&&a[k].length).map(([k,l])=>`<div><span class="eyebrow">${l}</span><ol class="small" style="margin:4px 0 0;padding-left:20px">${a[k].slice(0,4).map(x=>`<li>${esc(String(x))}</li>`).join('')}</ol></div>`).join('')}
     ${a.left_right?`<div><span class="eyebrow">Left vs right</span><p class="small" style="margin:2px 0 0">${esc(a.left_right)}</p></div>`:''}

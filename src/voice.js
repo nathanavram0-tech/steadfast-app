@@ -286,6 +286,7 @@ async function end() {
   if (C.coachLine || C.userLine) finishCoachTurn();
   try { C.session && C.session.close(); } catch (e) {}
   await cleanup();
+  if (C.photo) { try { URL.revokeObjectURL(C.photo.url); } catch (x) {} C.photo = null; }
   setState('ended'); SF.render();
   const mins = Math.max(1, Math.round((Date.now() - (C.startedAt || Date.now())) / 60000));
   const said = C.lines.map(l => (l.who === 'you' ? 'Nathan: ' : 'Coach: ') + l.text).join('\n');
@@ -368,7 +369,8 @@ function stateBody() {
     : s === 'error' ? `<button class="vc-go" data-a="vcStart">${SF.I.mic}<span>${C.errCode === 'closed' ? 'Reconnect' : 'Try again'}</span></button>`
     : s === 'paused' ? `<div class="vc-ctl"><button class="vc-go" data-a="vcResume"><span>Resume</span></button><button class="vc-end" data-a="vcEnd" aria-label="End call">End</button></div>`
     : `<div class="vc-ctl"><label class="vc-cam" for="vc-photo" aria-label="Show the coach a photo">${SF.I.cam || SF.I.image || 'Photo'}</label><input type="file" id="vc-photo" accept="image/*" hidden data-vc-photo="1"><button class="vc-mute ${C.muted ? 'on' : ''}" data-a="vcMute" aria-pressed="${C.muted}" aria-label="${C.muted ? 'Unmute' : 'Mute'}">${C.muted ? 'Unmute' : 'Mute'}</button><button class="vc-end" data-a="vcEnd" aria-label="End call">End</button></div>`;
-  return { live, caption, main };
+  const shot = C.photo && live ? `<figure class="vc-shot"><img src="${C.photo.url}" alt="The photo you sent"><figcaption>${C.photo.status === 'analyzing' ? '<span class="vc-dot"></span> Analyzing your photo…' : C.photo.status === 'done' ? 'Reviewed ✓ (saved to your chat)' : 'Not analyzed'}</figcaption></figure>` : '';
+  return { live, caption: caption + shot, main };
 }
 function view() {
   const a = SF.AG(SF.UI.agent || 'main');
@@ -414,7 +416,9 @@ async function sendPhoto(file) {
   if (!C.session) return;
   const agent = C.agent;
   C.lines.push({ who: 'you', text: '[showed a photo]' }); SF.chatLog(agent).push({ role: 'me', text: '[Photo shown on the call]', ts: Date.now(), voice: true });
-  setState('thinking', ''); C.coachLine = ''; C.photoNote = 'Looking at your photo…'; paint();
+  if (C.photo) { try { URL.revokeObjectURL(C.photo.url); } catch (x) {} }
+  C.photo = { url: URL.createObjectURL(file), status: 'analyzing' };
+  setState('thinking', ''); C.coachLine = ''; C.photoNote = ''; paint();
   // Tell the coach right away, so it never answers "I can't see photos" while the analysis runs.
   try { C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: '(Nathan just sent you a photo. Your analysis of it arrives in a few seconds. If he talks before then, say you are looking at it now. Never say you cannot see or analyze it.)' }] }], turnComplete: false }); } catch (x) {}
   try {
@@ -426,16 +430,21 @@ async function sendPhoto(file) {
     const blob = await (await fetch('data:image/jpeg;base64,' + data)).blob();
     const r = await sample(`You are an expert coach looking at a photo Nathan (20, 6'4", lean bulking, lifting 3-4 years) just showed his ${agent === 'glow' ? 'glow-up coach' : agent === 'trainer' ? 'personal trainer' : 'head coach'} on a voice call, asking what he needs to work on. First line exactly "KIND: physique" or "KIND: face" or "KIND: other". Then the review, written as the coach's notes.
 ${SF.lookSpec(agent)}
-Be honest, specific and direct like a top coach: name exact muscles and sides and rank priorities, no generalities and no flattery. Describe only what you can see, and say when lighting, angle or pump limits what you can tell. Plain text, under 350 words.`, { images: [blob], cache: false });
+Be honest, specific and direct like a top coach: name exact muscles and sides and rank priorities, no generalities and no flattery. Describe only what you can see, and say when lighting, angle or pump limits what you can tell. Plain text, under 280 words.
+If KIND is physique, end with one last line exactly: SCORES: {"shoulders":n,"chest":n,"arm_left":n,"arm_right":n,"back":n,"core_leanness":n,"legs":n,"calves":n} with 1-10 scores relative to a lean, athletic natural physique, null for anything not visible (arm_left = his left arm).`, { images: [blob], cache: false });
     const raw = String((r && r.text) || '').trim();
     const kind = ((raw.match(/^\s*KIND:\s*(physique|face|other)/i) || [])[1] || '').toLowerCase();
-    const seen = raw.replace(/^\s*KIND:[^\n]*\n?/i, '').trim();
+    let scores = null; const sm = raw.match(/SCORES:\s*(\{[\s\S]*?\})/);
+    if (sm) { try { const o = JSON.parse(sm[1]); scores = {}; Object.entries(o).forEach(([k, v]) => { const n = +v; if (v != null && n >= 1 && n <= 10) scores[k] = Math.round(n * 10) / 10; }); } catch (x) {} }
+    const seen = raw.replace(/^\s*KIND:[^\n]*\n?/i, '').replace(/\n?\s*SCORES:[\s\S]*$/, '').trim();
     if (!seen) throw new Error('Could not read that photo.');
     if (/can.?t (see|view|analy[sz]e)|unable to (see|view|analy[sz]e)/i.test(seen.slice(0, 160))) throw new Error('the vision model declined to review it. Try a clearer, well-lit photo');
-    // Keep it for progress tracking too (physique -> progress photos, face -> face photos), analyzed in the background.
-    if ((kind === 'physique' || kind === 'face') && SF.addPhoto && SF.shrinkImage) {
-      SF.shrinkImage(file).then(img => SF.addPhoto(kind === 'face' ? 'face' : 'progress', img, SF.TODAY, kind === 'face' ? 'face' : 'other')).catch(() => {});
+    // Keep it for progress tracking too (physique -> progress photos, face -> face photos), with this
+    // review and its scores attached, so no second AI call is spent on it.
+    if ((kind === 'physique' || kind === 'face') && SF.addPhotoReviewed && SF.shrinkImage) {
+      SF.shrinkImage(file).then(img => SF.addPhotoReviewed(kind === 'face' ? 'face' : 'progress', img, SF.TODAY, kind === 'face' ? 'face' : 'other', { summary: seen.split(/(?<=[.!?])\s/).slice(0, 2).join(' '), review: seen, ...(scores && Object.keys(scores).length ? { scores } : {}) })).catch(() => {});
     }
+    C.photo && (C.photo.status = 'done');
     if (!C.session) return;
     C.photoNote = '';
     C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: `(Nathan just showed you a photo on the call. You can see it; this is exactly what is in it: """${seen}""". Talk to him about it as yourself, out loud, as if you are looking at it: the most important things you see in your lane and what to work on first. Keep it conversational, 3-5 sentences, then ask what he wants to focus on. Don't mention a description or another model.)` }] }], turnComplete: true });
@@ -443,6 +452,7 @@ Be honest, specific and direct like a top coach: name exact muscles and sides an
     RT && RT.audit('voice', 'photo_shown', { agent });
   } catch (e) {
     const why = (e && (e.message || e.code)) || 'unknown error';
+    C.photo && (C.photo.status = 'failed');
     C.photoNote = 'Couldn\'t analyze that photo: ' + why; setState('listening'); paint();
     setTimeout(() => { if (C.photoNote.startsWith('Couldn')) { C.photoNote = ''; paint(); } }, 9000);
     try { C.session && C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: `(The photo he just sent could not be analyzed because of a technical problem: ${why}. Tell him that in one short line and ask him to try again or send it in the text chat. Do not say you are unable to see photos in general.)` }] }], turnComplete: true }); } catch (x) {}
@@ -504,6 +514,8 @@ css.textContent = `
 .vc-state.s-thinking i,.vc-state.s-connecting i{background:#438BFA;animation:aura .8s infinite}
 .vc-state.s-speaking{color:#00D4FF}.vc-state.s-speaking i{background:#00D4FF;box-shadow:0 0 14px #00D4FF}
 .vc-state.s-error,.vc-state.s-paused{color:#FF8DA0}.vc-state.s-error i,.vc-state.s-paused i{background:#FF3B5C}
+.vc-shot{margin:10px auto 0;display:grid;gap:6px;justify-items:center;max-width:220px}.vc-shot img{width:100%;max-height:260px;object-fit:cover;border-radius:16px;border:1px solid rgba(141,187,255,.25)}.vc-shot figcaption{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.vc-dot{width:8px;height:8px;border-radius:50%;background:var(--neon,#00D4FF);animation:vcDot 1s ease-in-out infinite}@keyframes vcDot{50%{opacity:.25}}
 .vc-sub{margin:0 auto;text-align:center;color:var(--muted);font-size:15px;line-height:1.45;max-width:360px;min-height:44px}
 .vc-err{margin:0 auto;text-align:center;color:#FFC2CD;font-size:15px;line-height:1.45;max-width:360px;padding:12px 14px;border-radius:14px;background:rgba(255,59,92,.10);border:1px solid rgba(255,59,92,.3)}
 .vc-go{display:flex;align-items:center;justify-content:center;gap:12px;min-height:64px;border-radius:999px;font-weight:800;font-size:18px;color:#06101C;background:linear-gradient(135deg,#00D4FF,var(--ac,#438BFA));box-shadow:0 10px 40px -8px rgba(0,212,255,.55);flex:1;width:100%;box-sizing:border-box}

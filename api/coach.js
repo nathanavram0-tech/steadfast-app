@@ -1,7 +1,7 @@
 // Text coaches: one model round per request. The app runs its own tools between rounds,
 // exactly like it did inside Claude, so every coach keeps the same tools and confirmations.
 import { GoogleGenAI } from '@google/genai';
-import { send, readJson, requireUser, TEXT_MODEL, env, errCode, missingEnv } from './_lib.js';
+import { send, readJson, requireUser, TEXT_MODEL, env, errCode, missingEnv, generateWithFallback } from './_lib.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return send(res, 405, { code: 'method' });
@@ -25,14 +25,15 @@ export default async function handler(req, res) {
   };
   try {
     const ai = new GoogleGenAI({ apiKey: env('GEMINI_API_KEY') });
-    const r = await ai.models.generateContent({ model: b.deep ? env('GEMINI_DEEP_MODEL', TEXT_MODEL()) : TEXT_MODEL(), contents, config });
+    const { r, model } = await generateWithFallback(ai, { contents, config }, { first: b.deep ? env('GEMINI_DEEP_MODEL', TEXT_MODEL()) : TEXT_MODEL() });
     const cand = (r.candidates || [])[0] || {};
     const parts = (cand.content && cand.content.parts) || [];
     const calls = parts.filter(p => p.functionCall).map(p => ({ id: p.functionCall.id || null, name: p.functionCall.name, args: p.functionCall.args || {} }));
     const text = parts.filter(p => typeof p.text === 'string' && !p.thought).map(p => p.text).join('');
-    return send(res, 200, { parts, calls, text, finish: cand.finishReason || null });
+    return send(res, 200, { parts, calls, text, finish: cand.finishReason || null, model });
   } catch (e) {
-    console.error('coach', e && e.message);
-    return send(res, 502, { code: errCode(e), message: 'The coach model had a problem. Try again.' });
+    console.error('coach', e && e.message, JSON.stringify(e && e.tried || []));
+    const code = e.code === 'rate_limited' ? 'rate_limited' : errCode(e);
+    return send(res, 502, { code, message: code === 'rate_limited' ? 'Google\'s free AI limit is used up for now on every model. Daily limits reset at midnight Pacific (3 AM Eastern).' : 'The coach model had a problem: ' + String((e && e.message) || e).slice(0, 160) });
   }
 }

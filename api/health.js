@@ -1,6 +1,6 @@
 // Setup check: tells you which settings are missing and whether the AI models are reachable.
 import { GoogleGenAI } from '@google/genai';
-import { send, TEXT_MODEL, LIVE_MODEL, env, missingEnv } from './_lib.js';
+import { send, TEXT_MODEL, LIVE_MODEL, env, missingEnv, generateWithFallback } from './_lib.js';
 import { research, backupSearch, searchModels } from './_search.js';
 
 export default async function handler(req, res) {
@@ -27,9 +27,9 @@ export default async function handler(req, res) {
     try {
       const ai = new GoogleGenAI({ apiKey: env('GEMINI_API_KEY') });
       const png = 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC';
-      const r = await ai.models.generateContent({ model: TEXT_MODEL(), contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/png', data: png } }, { text: 'What single color fills this image? One word.' }] }] });
-      out.vision = { ok: true, model: TEXT_MODEL(), answer: String(r.text || '').slice(0, 60) };
-    } catch (e) { out.vision = { ok: false, model: TEXT_MODEL(), error: String((e && e.message) || e).slice(0, 300) }; }
+      const { r, model, tried } = await generateWithFallback(ai, { contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/png', data: png } }, { text: 'What single color fills this image? One word.' }] }] });
+      out.vision = { ok: true, model, answer: String(r.text || '').slice(0, 60), skipped: tried.map(t => t.model + ': ' + t.code) };
+    } catch (e) { out.vision = { ok: false, tried: e.tried, error: String((e && e.message) || e).slice(0, 300) }; }
   }
   send(res, 200, out);
 }
