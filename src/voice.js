@@ -270,7 +270,7 @@ async function start() {
     try { C.wake = await navigator.wakeLock.request('screen'); } catch (e) {}
     setState('listening');
     // Coach opens the call.
-    C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: '(Nathan just started a voice call. Greet him briefly and naturally, in your own words, no stock opener.)' }] }], turnComplete: true });
+    C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: `(Nathan just started a voice call with you, ${SF.pname(C.agent)}. Greet him briefly and naturally in your own words, as yourself.)` }] }], turnComplete: true });
     SF.logEvent('coach', 'Voice call started', { src: 'Coach' });
     loop();
   } catch (e) {
@@ -387,6 +387,7 @@ function bodyHtml(caption, main) {
     ${confirmsHtml()}
     ${C.showText ? `<div class="vc-tx" id="vc-tx">${transcriptHtml()}</div>` : ''}
     ${main}
+    <p class="vc-voice tiny muted">Voice: ${voiceFor(C.state !== 'idle' && C.state !== 'ended' ? C.agent : (SF.UI.agent || 'main'))}</p>
     ${C.state === 'idle' ? '<p class="vc-note">Keep the screen on during calls: iPhone pauses the mic when it locks. Headphones and AirPods work.</p>' : ''}`;
 }
 function paint() {
@@ -454,6 +455,7 @@ css.textContent = `
 .vc{display:flex;flex-direction:column;gap:14px;min-height:calc(100dvh - 150px);padding-bottom:12px}
 .vc-stage{display:grid;place-items:center;padding:8px 0}
 .vc-cam{display:grid;place-items:center;width:64px;min-height:64px;border-radius:999px;border:1px solid var(--line);background:rgba(255,255,255,.05);color:#fff;cursor:pointer;flex:0 0 auto}.vc-cam svg{width:24px;height:24px}
+.vc-voice{text-align:center;margin:0}
 .vc-team-btn{align-self:center;color:#8DBBFF;min-height:44px}
 .vc-team{display:grid;gap:12px}.vc-team h2{margin:0}
 .vc-tm{display:grid;grid-template-columns:40px 1fr 1fr;gap:10px;align-items:end}
