@@ -27,11 +27,24 @@ page.on('pageerror', e => log('  [pageerror]', e.message));
 
 await page.route(/cdn\.jsdelivr\.net|raw\.githubusercontent\.com/, r => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC', 'base64') }));
 await page.route('**/api/config', r => r.fulfill({ json: { supabaseUrl: SB, supabaseAnonKey: 'anon' } }));
+// Knowledge library API served from the real index and search code.
+const KB = await import('../api/_knowledge.js'); const KL = JSON.parse(readFileSync('knowledge/index.json', 'utf8')); const KMS = KB.loadIndex(KL.index);
+let kbQueries = [];
+await page.route('**/api/knowledge**', r => { const u = new URL(r.request().url());
+  if (r.request().method() === 'POST') { const b = r.request().postDataJSON(); kbQueries.push(b); const hits = KB.searchLibrary(KL, KMS, b.query, { departments: KB.AGENT_DEPTS[b.agent] || KB.AGENT_DEPTS.main, limit: b.limit || 6 });
+    return r.fulfill({ json: { query: b.query, departments: KB.AGENT_DEPTS[b.agent], results: hits.map(h => ({ doc: h.doc.id, title: h.doc.title, department: h.doc.department, section: h.chunk.heading, text: h.chunk.text, evidence: h.doc.evidence, evidence_label: KB.EVIDENCE[h.doc.evidence], verified: h.doc.verified, status: 'verified', sources: h.doc.sources })) } }); }
+  if (u.searchParams.get('stats')) return r.fulfill({ json: { stats: KL.stats, coverage: KL.coverage, departments: KB.DEPARTMENTS, evidence: KB.EVIDENCE, recent: KL.docs.slice(0, 6).map(d => ({ ...d, sections: undefined })) } });
+  if (u.searchParams.get('doc')) { const d = KL.docs.find(x => x.id === u.searchParams.get('doc')); return r.fulfill({ json: { doc: d } }); }
+  if (u.searchParams.get('list')) return r.fulfill({ json: { docs: KL.docs.filter(d => d.department === u.searchParams.get('list')) } });
+  return r.fulfill({ status: 400, json: {} }); });
+let kbReply = '';
 let coachCalls = 0;
 await page.route('**/api/coach', async r => {
   coachCalls++; const body = r.request().postDataJSON(); if (JSON.stringify(body.contents).includes('inlineData')) { imgCalls++; imgText = JSON.stringify(body.contents); }
   const last = body.contents[body.contents.length - 1];
   const fr = last.parts[0].functionResponse;
+  if (fr && fr.name === 'knowledge_search') { kbReply = JSON.stringify(fr.response.result); return r.fulfill({ json: { parts: [{ text: 'From the library: incline pressing (Chaves 2020).' }], calls: [], text: 'From the library: incline pressing (Chaves 2020).' } }); }
+  if (body.tools && /upper chest/i.test(JSON.stringify(last))) { const call = { name: 'knowledge_search', args: { query: 'upper chest incline press' } }; return r.fulfill({ json: { parts: [{ functionCall: call }], calls: [call], text: '' } }); }
   if (fr && fr.name === 'transfer_to_coach') return r.fulfill({ json: { parts: [{ text: "That's Jay's area, sending you over." }], calls: [], text: "That's Jay's area, sending you over." } });
   if (body.tools && /what should i eat after/i.test(JSON.stringify(last))) { transferSys = JSON.stringify(body); if (/YOU ARE Jay/.test(transferSys)) { fuelGotIt = true; return r.fulfill({ json: { parts: [{ text: 'Jay here: 40 g protein and rice.' }], calls: [], text: 'Jay here: 40 g protein and rice.' } }); } const call = { name: 'transfer_to_coach', args: { coach: 'fuel', question: 'What should I eat after my workout?' } }; return r.fulfill({ json: { parts: [{ functionCall: call }], calls: [call], text: '' } }); }
   if (fr && fr.name === 'web_search') { const src = fr.response.result.sources; const call = { name: 'save_research', args: { topic: 'Creatine and hair loss', area: 'appearance', summary: 'One small 2009 study saw a DHT rise; no study has shown hair loss.', confidence: 'low', sources: src } }; return r.fulfill({ json: { parts: [{ functionCall: call }], calls: [call], text: '' } }); }
@@ -96,6 +109,10 @@ ok(searchTools.includes('web_search') && searchTools.includes('save_research'), 
 ok(/creatine/i.test(searchQ), 'coach searched the internet (server endpoint)');
 const brainDoc = store.get('brain'); ok(brainDoc && JSON.stringify(brainDoc.body).includes('Creatine and hair loss') && JSON.stringify(brainDoc.body).includes('pubmed'), 'research note with source saved to the knowledge base');
 ok(/Saved that research/.test(await page.locator('#chat').innerText()), 'coach confirmed after the save');
+ok(searchTools.includes('knowledge_search'), 'text coach has the knowledge library tool');
+await page.fill('#coach-in', 'how do I build more upper chest'); await page.click('[data-a=send]'); await page.waitForTimeout(2500);
+ok(kbQueries.length && /upper chest/.test(kbQueries[kbQueries.length - 1].query) && /phys-upper-chest|Building the upper chest/.test(kbReply) && /digitalcommons|strongerbyscience/.test(kbReply), 'coach searches the library and gets the sourced upper-chest research');
+ok(!/creatine/i.test(searchQ.replace('creatine', '')) , 'no web search needed for a library question');
 
 const before = imgCalls;
 await page.setInputFiles('#coach-photo', { name: 'me.png', mimeType: 'image/png', buffer: PNG }); await page.waitForTimeout(800);
@@ -241,6 +258,21 @@ ok(/Shoulders/.test(grow) && /\+0\.75"/.test(grow) && /Left arm/.test(grow) && /
 ok(await page.locator('.bodymap').count() === 1, 'body map is drawn');
 await page.locator('.grow').scrollIntoViewIfNeeded(); await page.screenshot({ path: 'test/growth.png' });
 const sw2 = await page.evaluate(() => document.documentElement.scrollWidth); ok(sw2 <= 390, 'progress page fits 390px (' + sw2 + ')');
+
+log('4c. Knowledge library screen');
+await page.evaluate(() => { location.hash = 'library'; }); await page.waitForTimeout(1200);
+const libTxt = await page.locator('main, body').first().innerText();
+ok(new RegExp(KL.stats.docs + '\\s*\\n?.*').test(libTxt) && /DOCUMENTS/.test(libTxt) && /KNOWLEDGE GAPS/.test(libTxt) && /DEPARTMENTS/.test(libTxt), 'library dashboard shows totals, departments and gaps');
+ok(/Creatine and hair loss/.test(libTxt), 'research saved by a coach shows under Needs verifying');
+await page.fill('#lib-q', 'protein'); await page.click('[data-a=libSearch]'); await page.waitForTimeout(800);
+const hit = page.locator('[data-a=libDoc]').first(); ok(await hit.count() === 1, 'library search returns documents');
+await page.locator('.card [data-a=libDoc]').first().click(); await page.waitForTimeout(800);
+const docTxt = await page.locator('.sheet').innerText().catch(() => '');
+ok(/Sources/i.test(docTxt) && /Summary/i.test(docTxt), 'document opens with its sections and sources');
+await page.screenshot({ path: 'test/library-doc.png' });
+await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+const sw3 = await page.evaluate(() => document.documentElement.scrollWidth); ok(sw3 <= 390, 'library fits 390px (' + sw3 + ')');
+await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: 'test/library.png', fullPage: true });
 
 log('5. Mobile layout');
 for (const r of ['home', 'talk', 'coach', 'prefs']) { await page.evaluate(r => { location.hash = r; }, r); await page.waitForTimeout(400); const sw = await page.evaluate(() => document.documentElement.scrollWidth); ok(sw <= 390, r + ' fits 390px (' + sw + ')'); }

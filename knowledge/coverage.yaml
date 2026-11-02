@@ -1,0 +1,110 @@
+# Research plan: every topic the library should cover, and which documents cover it.
+# A topic with no docs shows up as a gap on the Library screen.
+physique:
+  - {topic: Mechanisms of hypertrophy, docs: [phys-hypertrophy-mechanisms]}
+  - {topic: Training volume, docs: [phys-weekly-volume]}
+  - {topic: Training frequency, docs: [phys-training-frequency]}
+  - {topic: Load and rep ranges, docs: [phys-load-rep-range]}
+  - {topic: Proximity to failure, docs: [phys-proximity-to-failure]}
+  - {topic: Progressive overload, docs: [phys-progressive-overload]}
+  - {topic: Rest intervals, docs: [phys-rest-intervals]}
+  - {topic: Exercise selection and stretch position, docs: [phys-long-muscle-length]}
+  - {topic: Upper chest, docs: [phys-upper-chest]}
+  - {topic: Cardio and conditioning, docs: [phys-concurrent-cardio]}
+  - {topic: Injury prevention, docs: [phys-injury-prevention]}
+  - {topic: Greg Plitt profile, docs: [expert-greg-plitt]}
+  - {topic: Researcher profiles, docs: [expert-brad-schoenfeld, expert-eric-helms]}
+  - {topic: Side delts and shoulder width}
+  - {topic: Back width and thickness}
+  - {topic: Arms (biceps and triceps)}
+  - {topic: Legs, glutes and calves}
+  - {topic: Abs and core}
+  - {topic: Muscle imbalances and unilateral training}
+  - {topic: Deloads and fatigue management}
+  - {topic: Strength programming (powerlifting basics)}
+  - {topic: Posture and aesthetics}
+  - {topic: Body composition measurement}
+  - {topic: Classic bodybuilder profiles (Arnold, Reeves, Yates)}
+nutrition:
+  - {topic: Protein amount, docs: [nut-protein-intake]}
+  - {topic: Protein timing, docs: [nut-protein-distribution]}
+  - {topic: Creatine, docs: [nut-creatine]}
+  - {topic: Caffeine, docs: [nut-caffeine]}
+  - {topic: Lean bulking, docs: [nut-lean-bulk]}
+  - {topic: Cutting, docs: [nut-contest-prep]}
+  - {topic: Carbohydrates and training}
+  - {topic: Dietary fat and hormones}
+  - {topic: Micronutrients (vitamin D, iron, magnesium)}
+  - {topic: Sodium, potassium and water retention}
+  - {topic: Meal prep and food safety}
+  - {topic: Other supplements (omega-3, beta-alanine, citrulline)}
+health:
+  - {topic: Sleep duration, docs: [health-sleep-duration]}
+  - {topic: Alcohol, docs: [health-alcohol-muscle]}
+  - {topic: Daily steps, docs: [health-daily-steps]}
+  - {topic: Peptides and unapproved drugs, docs: [health-igf1-peptides]}
+  - {topic: Circadian rhythm and light}
+  - {topic: Testosterone and natural hormone health}
+  - {topic: Cardiovascular and metabolic health markers}
+  - {topic: Gut health}
+  - {topic: Stress and recovery}
+  - {topic: Hydration}
+  - {topic: Bloodwork basics}
+  - {topic: Longevity}
+appearance:
+  - {topic: Sunscreen, docs: [app-sunscreen-skin-aging]}
+  - {topic: Acne treatment basics}
+  - {topic: Retinoids}
+  - {topic: Facial puffiness and leanness}
+  - {topic: Haircuts and face shape}
+  - {topic: Jaw and face exercise claims (mewing)}
+business:
+  - {topic: Offers and value (Hormozi), docs: [expert-alex-hormozi]}
+  - {topic: Getting clients for videography}
+  - {topic: Pricing creative services}
+  - {topic: Sales calls and closing}
+  - {topic: Client retention and referrals}
+  - {topic: Content marketing and social growth}
+  - {topic: Personal branding}
+  - {topic: Advertising basics}
+  - {topic: Hiring and delegation}
+  - {topic: Business models and recurring revenue}
+  - {topic: Entrepreneur profiles}
+wealth:
+  - {topic: Emergency fund, docs: [wealth-emergency-fund]}
+  - {topic: Debt payoff, docs: [wealth-debt-payoff]}
+  - {topic: Self-employment tax, docs: [wealth-self-employment-tax]}
+  - {topic: Index funds vs active funds}
+  - {topic: Retirement accounts (Roth IRA, 401k)}
+  - {topic: Compound interest}
+  - {topic: Budgeting systems}
+  - {topic: Asset allocation and risk}
+  - {topic: Real estate investing basics}
+  - {topic: Business finances and cash flow}
+faith:
+  - {topic: Discipline and self-control, docs: [faith-discipline-scripture]}
+  - {topic: Prayer}
+  - {topic: Anxiety and trust}
+  - {topic: Work and diligence}
+  - {topic: Reading the Bible in context}
+  - {topic: Biblical leadership}
+  - {topic: The body and stewardship}
+  - {topic: Perseverance and suffering}
+  - {topic: Money and generosity}
+discipline:
+  - {topic: Habit formation, docs: [disc-habit-formation]}
+  - {topic: If-then planning, docs: [disc-implementation-intentions]}
+  - {topic: Willpower and ego depletion, docs: [disc-willpower-ego-depletion]}
+  - {topic: Procrastination, docs: [disc-procrastination]}
+  - {topic: Goal setting, docs: [disc-goal-setting]}
+  - {topic: Focus and deep work}
+  - {topic: Emotional regulation}
+  - {topic: Confidence and self-efficacy}
+  - {topic: Why people fail to stay consistent}
+communication:
+  - {topic: Negotiation anchoring, docs: [comm-first-offer-anchoring]}
+  - {topic: Public speaking}
+  - {topic: Active listening}
+  - {topic: Storytelling}
+  - {topic: Conflict resolution}
+  - {topic: Leadership}

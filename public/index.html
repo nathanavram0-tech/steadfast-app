@@ -475,6 +475,9 @@ body.r-talk #app{padding-bottom:20px}
 .confirm em{font-style:normal;font-size:12px;color:var(--muted);font-weight:700}
 .confirm .btn.sm{min-height:38px;flex:1}
 .undo{margin-top:6px;min-height:28px;color:var(--muted)}
+.ev{display:inline-block;font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap}.ev1{background:rgba(61,245,164,.16);color:#3DF5A4}.ev2{background:rgba(0,212,255,.14);color:#6FE3FF}.ev3{background:rgba(141,187,255,.16);color:#BFD6FF}.ev4{background:rgba(255,196,0,.15);color:#FFD45C}.ev5{background:rgba(255,59,92,.15);color:#FF8DA1}
+.lib-sec h4{margin:6px 0 4px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--ice)}.lib-sec p,.lib-sec li{font-size:14px;line-height:1.5}.lib-sec ul{margin:4px 0;padding-left:20px}
+.lib-gap summary{cursor:pointer;padding:6px 0}.lib-gap p{margin:4px 0 8px}
 .grow{display:grid;grid-template-columns:minmax(120px,170px) 1fr;gap:14px;align-items:start}.bodymap{width:100%;height:auto;display:block}
 @media (max-width:360px){.grow{grid-template-columns:1fr}.bodymap{max-width:180px;margin:0 auto}}
 .end.flat{color:var(--muted)}
@@ -1563,7 +1566,7 @@ V.prefs=()=>{
 };
 
 /* ================= Render ================= */
-const ROUTES=['home','body','faith','money','discipline','journal','reports','prefs','setup','coach','progress','share','talk','workouts','sleep','appearance'];
+const ROUTES=['home','body','faith','money','discipline','journal','reports','prefs','setup','coach','progress','share','talk','workouts','sleep','appearance','library'];
 function render(){
   const app=$('#app');
   let r=UI.route;
@@ -2145,6 +2148,7 @@ BULK + GLOW-UP RULES
 
 HOW YOU THINK (this is what makes you worth having)
 - You are one brain with many coaches. All coaches read the same records, so facts never differ between coaches; if something another coach said conflicts with the data, the data wins and you say so.
+- KNOWLEDGE LIBRARY: for any substantive question (training, nutrition, health, supplements, skin, business, money, the Bible, discipline, communication, or an expert's methods), call knowledge_search first and build the answer from those sourced documents plus his own data (lookup). Cite the source briefly, state how strong the evidence is in plain words, and point out disagreements between experts when the library lists them. Use web_search only when the library has nothing relevant, the information may have changed, or he asks for new research. Challenge him and correct him when his plan conflicts with the evidence, and finish with exactly what to do next.
 - The BRIEF below is a summary. Before answering anything about the past, trends, a specific record, photos, journal, money detail, habits or research, call lookup. Never guess what you can look up.
 - Know what kind of fact you hold: LOGGED = Nathan entered it (confirmed). AI estimate = macros you or another coach estimated. PLANNED = future. Photo readings = an AI opinion from an image, not a measurement. A day with nothing logged is unknown, not zero.
 - Investigate before you recommend. Weight flat 2+ weeks -> lookup trends (kcal average and how many days were logged, protein, steps, sleep, workouts) before suggesting about +150 kcal. Strength dropping -> exercise history, sleep, kcal, training frequency, stress. Routine keeps getting missed -> habits (which items, which days), wake/bed times, then suggest a schedule that fits. Spending up -> money by category vs last month. Puffy face -> sodium vs his usual, potassium, sleep, alcohol, training.
@@ -2744,6 +2748,60 @@ A.delCheckin=async()=>{const ci=S.core.checkins.find(x=>x.id===SH.id);S.core.che
 const SCORE_KEYS=[['overall','Overall'],['shoulders','Shoulders'],['chest','Chest'],['arms','Arms'],['arm_left','Left arm'],['arm_right','Right arm'],['back','Back'],['legs','Legs'],['calves','Calves'],['core_leanness','Leanness'],['symmetry','Symmetry']];
 function scoreBars(sc,prev){return `<div class="stack" style="gap:10px">${SCORE_KEYS.filter(([k])=>sc&&sc[k]!=null).map(([k,l])=>`<div class="hbar"><div class="lab">${l}<span>${sc[k]}/10${prev&&prev[k]!=null?` <em class="${sc[k]>prev[k]?'up':sc[k]<prev[k]?'dn':''}">${sc[k]>prev[k]?'▲':sc[k]<prev[k]?'▼':'•'} ${r1(Math.abs(sc[k]-prev[k]))||''}</em>`:''}</span></div>${bar(sc[k],10,k==='overall'?'big neon':'')}</div>`).join('')}</div>`}
 
+/* ---------- Knowledge library (standalone app): researched documents every coach searches ---------- */
+const LIB={stats:null,loading:false,err:'',results:null,q:'',busy:false};
+const libApi=()=>window.SteadfastRuntime&&window.SteadfastRuntime.knowledge;
+async function libLoad(force){if(!libApi()||LIB.loading||(LIB.stats&&!force))return;LIB.loading=true;try{LIB.stats=await libApi()('?stats=1');LIB.err=''}catch(e){LIB.err=String(e.message||e)}LIB.loading=false;if(UI.route==='library'||UI.route==='home')render()}
+const EV_SHORT={1:'Strong evidence',2:'Moderate evidence',3:'Expert opinion',4:'Emerging',5:'Unsupported / disputed'};
+const evChip=n=>`<span class="ev ev${n}">${EV_SHORT[n]||'?'}</span>`;
+V.library=()=>{
+  if(!libApi())return `${head('LIBRARY')}<section class="card"><p class="note">The research library lives in the standalone Steadfast app.</p></section>`;
+  libLoad();const L=LIB.stats,st=L&&L.stats,D=(L&&L.departments)||{};
+  const mine=brain().kb.slice().sort((a,b)=>(a.updated<b.updated?1:-1));
+  return `${head('LIBRARY')}
+  <section class="card hero neon-card"><span class="eyebrow">Your research library</span>
+    ${st?`<div class="grid3"><div class="stat"><span>DOCUMENTS</span><b>${st.docs}</b><span>${st.chunks} sections</span></div><div class="stat"><span>SOURCES</span><b>${st.sources}</b><span>${st.experts} expert profiles</span></div><div class="stat"><span>COVERAGE</span><b>${st.covered}/${st.planned}</b><span>topics</span></div></div>
+    <div class="stack" style="gap:6px">${[1,2,3,4,5].map(n=>`<div class="hbar"><div class="lab">${EV_SHORT[n]}<span>${st.byEvidence[n]||0}</span></div>${bar(st.byEvidence[n]||0,Math.max(1,st.docs),'')}</div>`).join('')}</div>
+    <p class="tiny muted" style="margin:0">Every coach searches this first, for free. New internet research only runs when the library can't answer or things may have changed. Index built ${shortDate(st.built.slice(0,10))}.</p>`
+    :LIB.err?`<p class="note">Couldn't load the library: ${esc(LIB.err)}</p><button class="btn ghost" data-a="libReload">Try again</button>`:'<p class="note">Loading the library…</p>'}
+  </section>
+  <section class="card"><div class="card-head"><div class="t"><h2>SEARCH</h2></div></div>
+    <form class="row" style="gap:8px" data-lib-search="1" onsubmit="return false"><input class="in" id="lib-q" value="${esc(LIB.q)}" placeholder="e.g. upper chest, protein, debt, discipline" aria-label="Search the library"><button class="btn sm" data-a="libSearch">Search</button></form>
+    ${LIB.busy?'<p class="small muted">Searching…</p>':LIB.results?(LIB.results.length?`<div class="list">${LIB.results.map(r=>`<button class="li" data-a="libDoc" data-id="${esc(r.doc)}"><div class="main"><b>${esc(r.title)}</b><span>${esc(r.section)} · ${esc(String(r.text).replace(/\s+/g,' ').slice(0,140))}…</span></div><div class="end">${evChip(r.evidence)}<span>${esc(D[r.department]||r.department)}</span></div></button>`).join('')}</div>`:'<p class="small muted">Nothing in the library on that yet. Ask a coach and they will research it on the web.</p>'):''}
+  </section>
+  ${st?`<section class="card"><div class="card-head"><div class="t"><h2>DEPARTMENTS</h2></div></div><div class="list">${Object.entries(D).map(([k,n])=>{const b=st.byDept[k]||{docs:0,sources:0,experts:0};const gaps=st.gaps.filter(g=>g.department===k).length;return `<button class="li" data-a="libDept" data-v="${k}"><div class="main"><b>${esc(n)}</b><span>${b.docs} docs · ${b.sources} sources${b.experts?` · ${b.experts} experts`:''}</span></div><div class="end">${gaps?`<span class="red">${gaps} gaps</span>`:'✓'}</div></button>`}).join('')}</div></section>
+  <section class="card"><div class="card-head"><div class="t"><h2>RECENTLY UPDATED</h2></div></div><div class="list">${(L.recent||[]).slice(0,6).map(d=>`<button class="li" data-a="libDoc" data-id="${esc(d.id)}"><div class="main"><b>${esc(d.title)}</b><span>Verified ${shortDate(d.verified)} · ${esc(D[d.department]||d.department)}</span></div><div class="end">${evChip(d.evidence)}</div></button>`).join('')}</div></section>
+  <section class="card"><div class="card-head"><div class="t"><h2>NEEDS VERIFYING</h2></div><span class="tiny muted">${mine.length+st.stale.length+st.pending.length}</span></div>
+    ${st.stale.length?`<p class="small" style="margin:0"><b>Past review date:</b> ${st.stale.map(esc).join(', ')}</p>`:''}
+    ${mine.length?`<div class="list">${mine.slice(0,12).map(k=>`<div class="li"><div class="main"><b>${esc(k.topic)}</b><span>${k.by==='web'?'From a web search':'Starter note'} · ${esc(k.updated||'')} · ${(k.sources||[]).length} source${(k.sources||[]).length===1?'':'s'}${k.evidence?' · '+EV_SHORT[k.evidence]:''}</span></div><div class="end"><button class="icon-btn sm" data-a="libKbDel" data-id="${esc(k.id||k.topic)}" aria-label="Delete note">${I.trash}</button></div></div>`).join('')}</div>`:'<p class="small muted" style="margin:0">Research your coaches save from the web lands here until it is reviewed into the library.</p>'}
+  </section>
+  <section class="card"><div class="card-head"><div class="t"><h2>KNOWLEDGE GAPS</h2></div><span class="tiny muted">${st.gaps.length} topics</span></div>
+    ${Object.keys(D).map(k=>{const g=st.gaps.filter(x=>x.department===k);return g.length?`<details class="lib-gap"><summary><b>${esc(D[k])}</b> <span class="muted">${g.length}</span></summary><p class="small muted">${g.map(x=>esc(x.topic)).join(' · ')}</p></details>`:''}).join('')}
+    <button class="btn" data-a="libDeep">${I.bolt} Run a deep research session</button>
+    <p class="tiny muted" style="margin:0">A deep session has ${esc(pname('main'))} research one topic from several angles on the web and save it with sources (uses your AI quota). It lands in Needs verifying.</p></section>`:''}`;
+};
+A.libReload=()=>{LIB.stats=null;LIB.err='';libLoad(true);render()};
+A.libSearch=async()=>{const q=($('#lib-q')||{}).value||'';LIB.q=q.trim();if(!LIB.q)return;LIB.busy=true;render();try{const r=await libApi()('',{query:LIB.q,agent:'main',limit:10});const seen=new Set();LIB.results=(r.results||[]).filter(x=>!seen.has(x.doc)&&seen.add(x.doc))}catch(e){LIB.results=[];toast(String(e.message||e))}LIB.busy=false;render()};
+document.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target&&e.target.id==='lib-q'){e.preventDefault();A.libSearch()}});
+A.libDoc=async el=>{const id=el.dataset.id;openSheet({type:'libdoc',id,doc:null});try{const r=await libApi()('?doc='+encodeURIComponent(id));if(SH&&SH.type==='libdoc'&&SH.id===id){SH.doc=r.doc;renderSheet()}}catch(e){if(SH&&SH.type==='libdoc'){SH.err=String(e.message||e);renderSheet()}}};
+SHEETS.libdoc=()=>{const d=SH.doc;if(!d)return `${sheetHead('Library')}<p class="note">${SH.err?esc(SH.err):'Loading…'}</p>`;const D=(LIB.stats&&LIB.stats.departments)||{};
+  return `${sheetHead(esc(d.title))}<div class="row" style="gap:8px;flex-wrap:wrap">${evChip(d.evidence)}<span class="tiny muted">${esc(D[d.department]||d.department)} · verified ${shortDate(d.verified)}${d.review_by?' · re-check by '+esc(d.review_by):''}${d.status!=='verified'?' · <b class="red">'+esc(d.status)+'</b>':''}</span></div>
+  ${d.conflicts?`<p class="note" style="margin:0"><b>Where sources disagree:</b> ${esc(d.conflicts)}</p>`:''}
+  ${d.sections.map(x=>`<section class="lib-sec"><h4>${esc(x.heading)}</h4>${mdLite(x.text)}</section>`).join('')}
+  <section class="lib-sec"><h4>Sources</h4><ol class="small" style="padding-left:20px;margin:0">${d.sources.map(s=>`<li><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.title)}</a> <span class="muted">— ${esc(s.by)}, ${esc(s.published)}${s.kind?' · '+esc(s.kind):''}</span></li>`).join('')}</ol></section>
+  <button class="btn ghost" data-a="askCoach" data-v="${esc(`Using the library document "${d.title}", what should I do with this, based on my own data?`)}">${I.bolt} Ask ${esc(pname('main'))} how this applies to me</button>`};
+A.libDept=async el=>{const k=el.dataset.v;openSheet({type:'libdept',k,docs:null});try{const r=await libApi()('?list='+k);if(SH&&SH.type==='libdept'){SH.docs=r.docs;renderSheet()}}catch(e){toast(String(e.message||e))}};
+SHEETS.libdept=()=>{const D=(LIB.stats&&LIB.stats.departments)||{};return `${sheetHead(esc(D[SH.k]||SH.k))}${SH.docs?`<div class="list">${SH.docs.map(d=>`<button class="li" data-a="libDoc" data-id="${esc(d.id)}"><div class="main"><b>${esc(d.title)}</b><span>${esc(d.summary.slice(0,110))}…</span></div><div class="end">${evChip(d.evidence)}<span>${d.sources.length} src</span></div></button>`).join('')}</div>`:'<p class="note">Loading…</p>'}`};
+A.libKbDel=el=>{const id=el.dataset.id;const B=brain();B.kb=B.kb.filter(k=>(k.id||k.topic)!==id);touch('brain');render();toast('Note deleted')};
+A.libDeep=()=>{openSheet({type:'libdeep'})};
+SHEETS.libdeep=()=>{const g=(LIB.stats&&LIB.stats.stats.gaps)||[];return `${sheetHead('Deep research session')}
+  <label class="field"><span>TOPIC</span><select class="in" id="ld-gap"><option value="">Pick a knowledge gap…</option>${g.map(x=>`<option>${esc(x.topic)}</option>`).join('')}</select></label>
+  <label class="field"><span>OR YOUR OWN QUESTION</span><input class="in" id="ld-q" placeholder="e.g. best way to grow side delts"></label>
+  <p class="tiny muted">${esc(pname('main'))} will run several web searches from different angles, compare sources, rate the evidence, and save the result with links. It uses your Google AI quota.</p>
+  <button class="btn" data-a="libDeepGo">${I.bolt} Start research</button>`};
+A.libDeepGo=()=>{const t=(($('#ld-q')||{}).value||'').trim()||(($('#ld-gap')||{}).value||'').trim();if(!t){toast('Pick a topic or type a question.');return}closeSheet(true);UI.agent='main';location.hash='coach';
+  setTimeout(()=>coachSend(`DEEP RESEARCH SESSION on: ${t}.\n1) knowledge_search first to see what the library already has.\n2) Run 3-5 web_search calls from different angles (what systematic reviews or official bodies say, the strongest primary studies, what respected experts recommend and where they disagree, the newest findings).\n3) Compare the sources, rate the evidence (1 strong to 5 unsupported), and note limitations and conflicts.\n4) Call save_research with the sources, the evidence level and the key points.\n5) Then tell me the answer in plain words and exactly what I should do with it.`),300)};
+
 /* ---------- Progress page ---------- */
 function neonDual(W,days=84){
   const from=addD(TODAY,-days+1);
@@ -3339,6 +3397,7 @@ function catData(){
     {k:'sleep',name:'Sleep',ic:CAT_IC.sleep,ag:'mind',v:sl?`${sl} h last night`:'Log last night',sub:bed?`Lights out ${fmtTime(bed)} tonight`:`Target ${t.sleep} h`,p:sl?clamp(sl/t.sleep,0,1):0,warn:sl&&sl<t.sleep-1?'Short sleep':''},
     {k:'appearance',name:'Appearance',ic:CAT_IC.appearance,ag:'glow',v:`Grooming ${gd}/${g.length}`,sub:fph?`Face photo ${shortDate(fph.date)}`:'No face photo yet',p:g.length?gd/g.length:0,warn:''},
     {k:'progress',name:'Progress',ic:I.chart,ag:'trainer',v:gained!=null?`${gained>=0?'+':''}${r1(gained)} of +${c.goal.gain} lb`:'Start tracking',sub:ci?`Check-in ${shortDate(ci.date)}`:'Strength · photos · trends',p:gained!=null?clamp(gained/c.goal.gain,0,1):0,warn:''},
+    ...(window.SteadfastRuntime&&window.SteadfastRuntime.knowledge?[{k:'library',name:'Library',ic:I.book||I.journal,ag:'main',v:LIB.stats?`${LIB.stats.stats.docs} research docs`:'Research library',sub:LIB.stats?`${LIB.stats.stats.sources} sources · ${LIB.stats.stats.gaps.length} gaps`:'Sourced knowledge for every coach',p:LIB.stats?clamp(LIB.stats.stats.covered/Math.max(1,LIB.stats.stats.planned),0,1):0,warn:''}]:[]),
     {k:'journal',name:'Journal',ic:I.journal,ag:'mind',v:jm&&je?'Both done ✓':jm?'Evening open':'Morning open',sub:'Today\'s entry',p:((jm?1:0)+(je?1:0))/2,warn:h>=20&&!je?'Evening journal':''},
   ];
 }
@@ -3356,7 +3415,7 @@ function catGrid(){
     <b class="cc-name">${x.name.toUpperCase()}</b><span class="cc-v">${esc(x.v)}</span><span class="cc-sub">${esc(x.sub)}</span>
     <span class="cc-bar"><i style="width:${pct(x.p)}%"></i></span></button>`).join('')}</div></section>`;
 }
-A.goCat=el=>{const k=el.dataset.c;const map={body:['body','today'],nutrition:['body','food'],progress:['progress'],workouts:['workouts'],faith:['faith'],money:['money'],discipline:['discipline'],sleep:['sleep'],appearance:['appearance'],journal:['journal']}[k]||['home'];if(map[1])UI.bodyTab=map[1];go(map[0])};
+A.goCat=el=>{const k=el.dataset.c;const map={library:['library'],body:['body','today'],nutrition:['body','food'],progress:['progress'],workouts:['workouts'],faith:['faith'],money:['money'],discipline:['discipline'],sleep:['sleep'],appearance:['appearance'],journal:['journal']}[k]||['home'];if(map[1])UI.bodyTab=map[1];go(map[0])};
 function upNext(){const now=new Date(),hm=pad(now.getHours())+':'+pad(now.getMinutes());const ts=sortedTasks().filter(t=>!taskDone(t,TODAY));const nx=ts.filter(t=>!t.time||t.time>=hm).slice(0,3);const late=ts.filter(t=>t.time&&t.time<hm);
   return `<section class="card"><div class="card-head"><div class="t"><h2>UP NEXT</h2></div><a class="link" href="#discipline">Schedule</a></div>
   ${nx.length?`<div class="checks">${nx.map(t=>ckRow('taskCk',t.id,t.label,false,`<span class="meta">${fmtTime(t.time)}</span>`)).join('')}</div>`:'<div class="empty">Nothing left on today\'s schedule.</div>'}

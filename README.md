@@ -9,6 +9,7 @@ Steadfast as its own web app, so the coach can hold a live, interruptible voice 
 - **Supabase** stores your data (table `docs`) and an audit trail (table `audit`). Row level security means only your signed-in account can read or write your rows.
 - **Vercel functions (api/)** hold the Gemini key. The browser never sees it.
   - `/api/coach`: the text coach (Gemini).
+  - `/api/knowledge`: searches the app's own research library (knowledge/, see knowledge/README.md) and returns sections with citations and evidence levels. Coaches call it first; it costs nothing per search.
   - `/api/search`: answers a question with a live Google search and returns the sources (used by the coaches' web_search tool; save_research stores findings in the knowledge base).
   - `/api/voice-token`: a single-use token that lasts a few minutes and only works for the voice model. The phone uses it to open the live voice connection directly to Google.
   - `/api/health?models=1`: shows missing settings and whether the configured models exist.

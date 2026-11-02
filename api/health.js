@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 // Setup check: tells you which settings are missing and whether the AI models are reachable.
 import { GoogleGenAI } from '@google/genai';
 import { send, TEXT_MODEL, LIVE_MODEL, env, missingEnv, generateWithFallback } from './_lib.js';
@@ -30,6 +32,11 @@ export default async function handler(req, res) {
       const { r, model, tried } = await generateWithFallback(ai, { contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/png', data: png } }, { text: 'What single color fills this image? One word.' }] }] });
       out.vision = { ok: true, model, answer: String(r.text || '').slice(0, 60), skipped: tried.map(t => t.model + ': ' + t.code) };
     } catch (e) { out.vision = { ok: false, tried: e.tried, error: String((e && e.message) || e).slice(0, 300) }; }
+  }
+  if (req.query && req.query.library === '1') {
+    // Confirms the research library shipped with this deploy (counts only, no content).
+    try { const L = JSON.parse(readFileSync(join(process.cwd(), 'knowledge', 'index.json'), 'utf8')); out.library = { ok: true, docs: L.stats.docs, sources: L.stats.sources, sections: L.stats.chunks, gaps: L.stats.gaps.length, built: L.stats.built }; }
+    catch (e) { out.library = { ok: false, error: String(e.message).slice(0, 160) }; }
   }
   send(res, 200, out);
 }

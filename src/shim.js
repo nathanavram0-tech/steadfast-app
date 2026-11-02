@@ -106,7 +106,33 @@ function collection() {
 
 
 /* ---------- extra coach tools in the standalone app: internet research + saving what it learns ---------- */
-export const READ_TOOLS = new Set(['lookup', 'web_search']);
+export const READ_TOOLS = new Set(['lookup', 'web_search', 'knowledge_search']);
+/* ---------- Knowledge library: the app's own researched documents (no AI cost to search) ---------- */
+async function knowledgeApi(path, body) {
+  const token = await authToken();
+  const r = await fetch('/api/knowledge' + (path || ''), body ? { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify(body) } : { headers: { Authorization: 'Bearer ' + token } });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.message || ('Library unavailable (HTTP ' + r.status + ')'));
+  return j;
+}
+const words = (s) => String(s || '').toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 3);
+function personalResearch(query) {
+  const SF = window.SF; if (!SF || !SF.brain) return [];
+  const q = new Set(words(query)); if (!q.size) return [];
+  return SF.brain().kb.map(k => ({ k, n: words(`${k.topic} ${k.tags || ''} ${k.summary} ${(k.points || []).join(' ')}`).filter(w => q.has(w)).length })).filter(x => x.n >= 2 || (x.n >= 1 && q.size <= 2)).sort((a, b) => b.n - a.n).slice(0, 3)
+    .map(({ k }) => ({ topic: k.topic, summary: k.summary, points: k.points, confidence: k.confidence, updated: k.updated, status: k.verified ? 'reviewed' : 'saved from a web search (not yet verified into the library)', sources: k.sources }));
+}
+async function knowledgeSearch(a) {
+  const query = String(a.query || '').slice(0, 500);
+  const agent = (window.SF && window.SF.UI && window.SF.UI.agent) || 'main';
+  let lib = { results: [] }, err = null;
+  try { lib = await knowledgeApi('', { query, agent, departments: Array.isArray(a.departments) ? a.departments : undefined, limit: a.limit || 6 }); } catch (e) { err = String(e.message || e); }
+  const mine = personalResearch(query);
+  const results = (lib.results || []).map(r => ({ document: r.title, section: r.section, text: r.text.slice(0, 1400), evidence: `${r.evidence} = ${r.evidence_label}`, verified: r.verified, status: r.status, conflicts: r.conflicts || undefined, sources: r.sources }));
+  if (!results.length && !mine.length) return { found: 0, ...(err ? { error: err } : {}), note: 'Nothing relevant in the library. If it matters, use web_search (and save_research with sources), and say this is new research rather than library knowledge.' };
+  return { found: results.length + mine.length, departments: lib.departments, library: results, your_saved_research: mine.length ? mine : undefined,
+    note: 'Build the answer from these documents, combined with his own data (lookup). Name the source (author/organization and year) for key claims, state the evidence level in plain words, and mention conflicts when listed. Stale or pending items: say they need re-checking. Do not add claims the documents do not support; if they do not cover part of the question, say so or use web_search for that part.' };
+}
 async function webSearch(query) {
   const token = await authToken();
   let r;
@@ -136,8 +162,12 @@ function transferTool() {
 }
 function extraTools(opts = {}) {
   return [...(opts.text && window.SF && window.SF.pname ? [transferTool()] : []),
+    { name: 'knowledge_search',
+      description: 'Search Steadfast\'s own research library FIRST for any substantive question: how to train or eat, why something works, what research or experts say, health and supplement questions, business, money, the Bible, discipline, communication, and expert profiles (for example Greg Plitt, Brad Schoenfeld, Eric Helms, Alex Hormozi). Returns sourced sections with evidence levels (1 strong ... 5 unsupported). It is free and fast. Searches your lane by default; pass departments to widen (physique, nutrition, health, appearance, business, wealth, faith, discipline, communication).',
+      inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'The question in plain words plus key terms (for example "upper chest incline press hypertrophy").' }, departments: { type: 'array', items: { type: 'string' } } }, required: ['query'] },
+      execute: async (a) => knowledgeSearch(a) },
     { name: 'web_search',
-      description: 'Search the internet for a precise, current answer with sources. Use it for any factual question you are not certain about (nutrition facts, research findings, public figures, creators and athletes, their routines and claims, products, prices, rules, news, how-tos), and before saving new research. Saved notes (lookup topic "research") are a starting point, not the limit: search again for newer or better evidence whenever he asks you to look something up, when a note is old, thin or low confidence, or when the question goes beyond it. Ask one clear question per call; for a bigger question, run 2-3 searches from different angles (for example causes, what reviews say, what experts recommend). Say what is new compared with what was already saved.',
+      description: 'Search the internet for a precise, current answer with sources. Use it AFTER knowledge_search when the library has nothing relevant, when the information may have changed (news, prices, laws, new studies, current events, people in the news), or when he asks for new or deeper research. Also for any factual question you are not certain about (nutrition facts, research findings, public figures, creators and athletes, their routines and claims, products, prices, rules, news, how-tos), and before saving new research. Saved notes (lookup topic "research") are a starting point, not the limit: search again for newer or better evidence whenever he asks you to look something up, when a note is old, thin or low confidence, or when the question goes beyond it. Ask one clear question per call; for a bigger question, run 2-3 searches from different angles (for example causes, what reviews say, what experts recommend). Say what is new compared with what was already saved.',
       inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'The exact question to answer, with any useful detail (e.g. units, location, year).' } }, required: ['query'] },
       execute: async (a) => webSearch(String(a.query || '')) },
     { name: 'save_research',
@@ -147,6 +177,7 @@ function extraTools(opts = {}) {
         summary: { type: 'string', description: '2-4 sentences, plain language, with the key numbers' },
         points: { type: 'array', items: { type: 'string' } },
         confidence: { type: 'string', enum: ['low', 'moderate', 'high'] },
+        evidence: { type: 'number', description: '1 strong scientific/historical evidence, 2 moderate, 3 expert opinion/practical experience, 4 emerging/experimental, 5 unsupported or disputed' },
         sources: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, url: { type: 'string' } } } } },
         required: ['topic', 'summary', 'sources'] },
       execute: async (a) => {
@@ -155,7 +186,7 @@ function extraTools(opts = {}) {
         const srcs = (Array.isArray(a.sources) ? a.sources : []).filter(x => x && x.url).slice(0, 8).map(x => ({ title: String(x.title || 'source').slice(0, 200), url: String(x.url).slice(0, 500), type: 'web' }));
         if (!srcs.length) return { error: 'Save research only with at least one source link from web_search.' };
         const id = 'kb-' + topic.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
-        const note = { id, topic, area: String(a.area || 'other'), updated: new Date().toISOString().slice(0, 10), confidence: a.confidence || 'moderate', summary: String(a.summary || '').slice(0, 1200), points: (a.points || []).slice(0, 8).map(String), sources: srcs, by: 'web' };
+        const note = { id, topic, area: String(a.area || 'other'), updated: new Date().toISOString().slice(0, 10), confidence: a.confidence || 'moderate', evidence: [1, 2, 3, 4, 5].includes(+a.evidence) ? +a.evidence : undefined, summary: String(a.summary || '').slice(0, 1200), points: (a.points || []).slice(0, 8).map(String), sources: srcs, by: 'web' };
         const i = B.kb.findIndex(k => k.id === id || (k.topic || '').toLowerCase() === topic.toLowerCase());
         if (i >= 0) B.kb[i] = { ...B.kb[i], ...note }; else B.kb.push(note);
         SF.touch('brain');
@@ -246,4 +277,4 @@ window.claude = {
     return null; // assets, mcp, room ... not used in the standalone app
   },
 };
-window.SteadfastRuntime = { extraTools, READ_TOOLS, authToken, signOut: () => S.sb && S.sb.auth.signOut(), user: () => S.user, ready: () => S.ready, configError: () => S.cfgErr, audit: async (source, action, detail) => { try { await S.sb.from('audit').insert({ user_id: S.user.id, source, action, detail }); } catch (e) {} } };
+window.SteadfastRuntime = { extraTools, READ_TOOLS, knowledge: knowledgeApi, authToken, signOut: () => S.sb && S.sb.auth.signOut(), user: () => S.user, ready: () => S.ready, configError: () => S.cfgErr, audit: async (source, action, detail) => { try { await S.sb.from('audit').insert({ user_id: S.user.id, source, action, detail }); } catch (e) {} } };
