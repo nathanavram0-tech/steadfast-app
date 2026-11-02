@@ -1,0 +1,17 @@
+{
+  "name": "steadfast-app",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node test/run.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "2.32.0",
+    "@supabase/supabase-js": "2.118.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.10"
+  },
+  "engines": { "node": ">=20" }
+}
