@@ -56,9 +56,9 @@ function loginScreen(msg) {
       try {
         const r = create ? await S.sb.auth.signUp({ email, password }) : await S.sb.auth.signInWithPassword({ email, password });
         if (r.error) throw r.error;
-        if (!r.data.session) { $('#sf-err').textContent = 'Check your email and tap the confirm link, then come back here and sign in.'; create = false; $('#sf-go').textContent = 'Sign in'; }
+        if (!r.data.session) { $('#sf-err').textContent = 'Check your email and tap the confirm link, then come back here and sign in.'; create = false; $('#sf-go').textContent = 'Sign in'; $('#sf-mode').textContent = 'New here? Create your account'; $('#sf-pass').autocomplete = 'current-password'; }
         else { el.remove(); resolve(r.data.session.user); }
-      } catch (err) { $('#sf-err').textContent = err.message || 'Could not sign in.'; }
+      } catch (err) { const m = err.message || 'Could not sign in.'; $('#sf-err').textContent = /invalid login/i.test(m) ? 'Wrong email or password, or this account has not been created yet. New here? Tap Create your account below.' : /not confirmed/i.test(m) ? 'Your email is not confirmed yet. Open the email from Supabase and tap the confirm link, then sign in.' : m; }
       finally { const b = $('#sf-go'); if (b) b.disabled = false; }
     };
   });
