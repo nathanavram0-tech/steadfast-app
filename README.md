@@ -13,6 +13,7 @@ Steadfast as its own web app, so the coach can hold a live, interruptible voice 
   - `/api/voice-token`: a single-use token that lasts a few minutes and only works for the voice model. The phone uses it to open the live voice connection directly to Google.
   - `/api/health?models=1`: shows missing settings and whether the configured models exist.
   - `/api/config`: the public Supabase URL and anon key (these are meant to be public; security comes from row level security).
+- **public/exercises.json** is a slim index of the public-domain Free Exercise DB (github.com/yuhonas/free-exercise-db). Logged exercises are matched to it to show start and end photos (loaded from the jsDelivr CDN). Rebuild with `node scripts/exercises.mjs exercises.json`.
 - **src/voice.js** is the live voice screen. It streams the mic to Gemini Live, plays the reply, handles interruption, runs the app's own tools, checks each change reached the database before reporting success, and saves the transcript and a summary into the coach's memory.
 
 ## Setup

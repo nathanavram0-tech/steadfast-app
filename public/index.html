@@ -475,6 +475,18 @@ body.r-talk #app{padding-bottom:20px}
 .confirm em{font-style:normal;font-size:12px;color:var(--muted);font-weight:700}
 .confirm .btn.sm{min-height:38px;flex:1}
 .undo{margin-top:6px;min-height:28px;color:var(--muted)}
+.grow{display:grid;grid-template-columns:minmax(120px,170px) 1fr;gap:14px;align-items:start}.bodymap{width:100%;height:auto;display:block}
+@media (max-width:360px){.grow{grid-template-columns:1fr}.bodymap{max-width:180px;margin:0 auto}}
+.end.flat{color:var(--muted)}
+.wx-list{display:grid;gap:8px;margin-top:8px}
+.wx{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:8px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid var(--line);color:inherit;font:inherit}
+.wx-img{flex:none;width:64px;height:48px;border-radius:12px;overflow:hidden;background:rgba(141,187,255,.08);display:grid;place-items:center}.wx-img img{width:100%;height:100%;object-fit:cover}.wx-img.none svg{width:20px;height:20px;opacity:.5}
+.wx-t{flex:1;min-width:0;display:grid;gap:2px}.wx-t b{font-size:15px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.wx-t em{font-style:normal;font-size:13px;color:var(--muted)}
+.wx-d{flex:none;display:grid;justify-items:end;font-size:13px;font-weight:800;color:var(--muted)}.wx-d small{font-size:10px;font-weight:600;color:var(--muted)}.wx-d.up{color:#3DF5A4}.wx-d.dn{color:var(--red,#FF3B5C)}.wx-d.new{color:var(--ice)}
+.end.up{color:#3DF5A4}.end.dn{color:var(--red,#FF3B5C)}
+.ex-hero{position:relative;aspect-ratio:3/2;border-radius:20px;overflow:hidden;background:#101D35}.ex-hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}.ex-hero img.b{animation:exSwap 2.4s ease-in-out infinite}
+@keyframes exSwap{0%,40%{opacity:0}50%,90%{opacity:1}100%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.ex-hero img.b{animation:none;opacity:0}}
 /* photos */
 .ph-badge{position:absolute;right:6px;top:6px;font-style:normal;font-size:10px;font-weight:800;background:rgba(67,139,250,.85);padding:2px 6px;border-radius:6px}
 .ph-badge.busy{background:rgba(8,11,18,.75);color:var(--ice)}
@@ -2114,7 +2126,8 @@ HOW YOU TALK
 DOING THINGS FOR HIM (use the tools; never just say you did it)
 - He tells you food he ate or will eat ("I had 200 g chicken and 300 g rice") -> estimate grams, kcal, protein, carbs, fat, sodium mg and potassium mg per item from standard nutrition data and call log_food. If he says what is in front of him or sends a meal photo and asks how much to eat, give exact grams that fit his remaining macros; only log it if he says he ate it or asks you to log it.
 - Mistakes -> remove_food with the entry ids shown in the food log.
-- Water, weight, waist, steps, sleep, alcohol, salt, face puffiness -> update_day.
+- Water, weight, waist, tape measurements (shoulders, chest, each arm, each thigh, calves), steps, sleep, alcohol, salt, face puffiness -> update_day.
+- "Where did I grow / how much progress since X" -> lookup growth (days = period). Tape inches are real; photo scores are AI estimates; never claim pounds of muscle per body part.
 - He did a checklist item (prayer, creatine, injection, pre-workout, task...) -> check_items with the ids listed.
 - Workouts he describes -> log_workout with exercises, sets, reps and weight when given.
 - Bible: "I want to read N chapters" -> bible action "next" and tell him the chapters; "I read them" -> bible action "mark_read". Answer Bible questions with references (KJV wording is fine) from a Christian perspective, encouraging and honest.
@@ -2275,7 +2288,7 @@ function diffCore(p,c,out){
 
 /* ---------- Photo intelligence ---------- */
 function photoIndexSync(){const B=brain();if(!PHOTOS)return;const ids=new Set(PHOTOS.map(p=>p.id));B.photos=B.photos.filter(x=>ids.has(x.id));
-  PHOTOS.forEach(p=>{let x=B.photos.find(y=>y.id===p.id);if(!x){x={id:p.id};B.photos.push(x)}x.type=p.type;x.pose=p.pose||(p.type==='face'?'face':'other');x.date=p.date;x.sum=p.analysis?p.analysis.summary:'';x.an=!!p.analysis});
+  PHOTOS.forEach(p=>{let x=B.photos.find(y=>y.id===p.id);if(!x){x={id:p.id};B.photos.push(x)}x.type=p.type;x.pose=p.pose||(p.type==='face'?'face':'other');x.date=p.date;x.sum=p.analysis?p.analysis.summary:'';x.an=!!p.analysis;x.sc=p.analysis&&p.analysis.scores&&Object.keys(p.analysis.scores).length?p.analysis.scores:undefined;if(!x.sc)delete x.sc});
   B.photos.sort((a,b)=>a.date<b.date?1:-1);touchQuiet('brain')}
 async function savePhotoDoc(p){if(Sync.mode==='cloud')await col().doc(p.id).set(JSON.parse(JSON.stringify(p)));else lsSet(LS_PH,PHOTOS)}
 const ANALYZING=new Set();
@@ -2369,6 +2382,7 @@ function lookup(inp){
       out=`Weigh-ins: ${W.map(([k,v])=>`${k} ${v}`).join(', ')||'none'}\n7-day avg now ${avg7(weights())?r1(avg7(weights())):'n/a'}; trend ${(()=>{const tr=trend(weights());return tr.ok?`${r1(tr.lbwk)} lb/wk (${r1(tr.pct)}%/wk)`:'not enough data'})()}\nWaist: ${ws.sort().join(', ')||'none'}\nStart ${c.goal.startWeight||'?'} lb on ${c.goal.startDate||'?'}, goal +${c.goal.gain} lb`;break}
     case 'sleep':out=keysBetween(from,to,62).map(k=>`${k}: ${dayR(k).sleep||'-'} h`).join(', ')+`\nTarget ${c.targets.sleep} h. Wake ${fmtTime((c.sched||{}).wake)}, lights out ${fmtTime((c.sched||{}).bed)}.`;break;
     case 'photos':{const P=brain().photos.filter(p=>p.date>=from||!inp.from).slice(0,lim);out=P.map(p=>`${p.date} [${p.id}] ${p.type} ${p.pose}: ${p.an?p.sum:'not analyzed yet'}`).join('\n')||'No photos.';if(PHOTOS){const full=P.map(x=>PHOTOS.find(y=>y.id===x.id)).filter(p=>p&&p.analysis).slice(0,4);if(full.length)out+='\n\nDetail:\n'+full.map(p=>`${p.date} ${p.pose}: ${JSON.stringify(p.analysis).slice(0,700)}`).join('\n')}out+='\n(Photo readings are AI opinions from images, not measurements. The images themselves are attached to the chat when Nathan asks about his physique or face.)';break}
+    case 'growth':out=growthText(inp.days||(inp.from?diffD(inp.from,TODAY):60));break;
     case 'checkins':out=(c.checkins||[]).slice(-lim).map(x=>`${x.date}: ${JSON.stringify(x.scores)} BF ${x.bf}. ${x.summary} Improve: ${(x.improve||[]).join('; ')} Focus: ${x.focus}`).join('\n')||'No check-ins.';break;
     case 'journal':{const ks=keysBetween(from,to,62).filter(k=>{const j=jR(k);return jFilled(j.m)||jFilled(j.e)||j.prayer});out=ks.map(k=>{const j=jR(k);const s=JSON.stringify({morning:j.m,evening:j.e,prayer:j.prayer});return `${k}: ${s}`}).filter(x=>!q||x.toLowerCase().includes(q)).join('\n').slice(0,6000)||'No journal entries in that range.';break}
     case 'prayers':out=(c.prayers||[]).map(p=>`[${p.id}] ${p.date} ${p.text}${p.answered?' — ANSWERED '+(p.answered===true?'':p.answered):''}`).join('\n')||'No prayer requests.';break;
@@ -2391,7 +2405,7 @@ function lookup(inp){
   }
   return {topic:t,data:String(out).slice(0,8000)};
 }
-const LOOKUP_TOPICS=['day','days','food','workouts','exercise','weights','sleep','photos','checkins','journal','prayers','bible','money','transactions','business','schedule','habits','trends','meal_plan','groceries','goals','activity','recommendations','research','memory'];
+const LOOKUP_TOPICS=['day','days','food','workouts','exercise','growth','weights','sleep','photos','checkins','journal','prayers','bible','money','transactions','business','schedule','habits','trends','meal_plan','groceries','goals','activity','recommendations','research','memory'];
 function evLine(e){const dt=new Date(e.t);return `${dowShort(dkey(dt))} ${dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}${e.d!==dkey(dt)?' (for '+e.d+')':''} [${e.a}] ${e.s==='you'?'Nathan':e.s}: ${e.x}`}
 
 /* ---------- Undo + confirm ---------- */
@@ -2451,12 +2465,13 @@ function coachTools(msg){
    x(inp){const k=dArg(inp.date);const items=Array.isArray(inp.items)?inp.items:[];if(!items.length)throw new Error('No items');const d=dayW(k);d.food=d.food||[];const grp=uid();let kc=0;
      items.forEach(it=>{const meal={breakfast:'b',lunch:'l',dinner:'d',snack:'s'}[it.meal]||defaultMeal();const e={id:uid(),meal,fid:null,si:-1,q:+it.grams||0,n:String(it.name||'Food').slice(0,80),amt:it.grams?`${Math.round(+it.grams)} g`:'1 serving',k:r1(+it.kcal||0),p:r1(+it.protein||0),c:r1(+it.carbs||0),f:r1(+it.fat||0),na:Math.round(+it.sodium_mg||0),kk:Math.round(+it.potassium_mg||0),grp,ai:true};d.food.push(e);kc+=e.k});
      saveDay(k);say(`Logged ${items.length} food${items.length===1?'':'s'} (${fmt(kc)} kcal)${k!==TODAY?' on '+shortDate(k):''}`);const t=totals(k),g=S.core.targets;return{date:k,logged:items.length,day_totals:{kcal:fmt(t.k),protein:fmt(t.p),carbs:fmt(t.c),fat:fmt(t.f)},left:{kcal:fmt(g.kcal-t.k),protein:fmt(g.p-t.p)}}}},
-  update_day:{w:1,d:'Set a day\'s numbers (only fields that changed). water_glasses_add adds 16 oz glasses. face = how his face looked that morning.',s:{type:'object',properties:{date:D,water_glasses_add:{type:'number'},water_glasses_set:{type:'number'},weight_lb:{type:'number'},waist_in:{type:'number'},steps:{type:'number'},sleep_hours:{type:'number'},alcohol_drinks:{type:'number'},added_salt_tsp:{type:'number'},face:{type:'string',enum:['sharp','normal','a bit puffy','puffy']}}},
+  update_day:{w:1,d:'Set a day\'s numbers (only fields that changed). water_glasses_add adds 16 oz glasses. face = how his face looked that morning.',s:{type:'object',properties:{date:D,water_glasses_add:{type:'number'},water_glasses_set:{type:'number'},weight_lb:{type:'number'},waist_in:{type:'number'},shoulders_in:{type:'number'},chest_in:{type:'number'},arm_left_in:{type:'number'},arm_right_in:{type:'number'},thigh_left_in:{type:'number'},thigh_right_in:{type:'number'},calf_in:{type:'number'},steps:{type:'number'},sleep_hours:{type:'number'},alcohol_drinks:{type:'number'},added_salt_tsp:{type:'number'},face:{type:'string',enum:['sharp','normal','a bit puffy','puffy']}}},
    x(inp){const k=dArg(inp.date);const d=dayW(k),ch=[];
      if(inp.water_glasses_set!=null){d.water=Math.max(0,Math.round(+inp.water_glasses_set));ch.push(`water ${d.water}`)}
      if(inp.water_glasses_add){d.water=Math.max(0,(d.water||0)+Math.round(+inp.water_glasses_add));ch.push(`water ${d.water}`)}
      if(+inp.weight_lb>70&&+inp.weight_lb<500){d.weight=r1(+inp.weight_lb);if(k===TODAY)S.core.profile.lb=d.weight;if(!S.core.goal.startWeight){S.core.goal.startWeight=d.weight;S.core.goal.startDate=k}saveCore();ch.push(`weight ${d.weight} lb`)}
      if(+inp.waist_in>18&&+inp.waist_in<70){d.waist=r1(+inp.waist_in);ch.push(`waist ${d.waist}"`)}
+     [['shoulders_in','shoulders','shoulders'],['chest_in','chest','chest'],['arm_left_in','armL','left arm'],['arm_right_in','armR','right arm'],['thigh_left_in','thighL','left thigh'],['thigh_right_in','thighR','right thigh'],['calf_in','calf','calves']].forEach(([f,k2,l])=>{const v=+inp[f];if(v>4&&v<90){d.meas=d.meas||{};d.meas[k2]=Math.round(v*4)/4;ch.push(`${l} ${d.meas[k2]}"`)}});
      if(inp.steps!=null){d.steps=Math.max(0,Math.round(+inp.steps));ch.push(`${fmt(d.steps)} steps`)}
      if(inp.sleep_hours!=null){d.sleep=clamp(r1(+inp.sleep_hours),0,16);ch.push(`sleep ${d.sleep} h`)}
      if(inp.alcohol_drinks!=null){d.alcohol=Math.max(0,Math.round(+inp.alcohol_drinks));ch.push(`${d.alcohol} drinks`)}
@@ -2695,7 +2710,7 @@ Images 1-${imgs.length}: today's photos (${TODAY}).${prevPhoto?` Image ${imgs.le
 ${prev?`Previous scores: ${JSON.stringify(prev.scores)}. Previous body-fat estimate: ${prev.bf}.`:''}
 Weight trend: ${coach(W).title}. ${sh.trained?'Trained today: '+sh.trained:''}
 Be honest, specific and motivating, like a good physique coach. Body-fat from photos is a rough range; say so with the range. Score each area 1-10 relative to a lean, athletic natural physique (be consistent with previous scores so changes are real).
-Reply with only JSON: {"summary":"2-3 sentences","vs_last":"what changed since last check-in, or empty if first","wins":["..."],"improve":["specific fixes for training, nutrition or posture"],"focus_next":"one sentence on the priority for the next 4 weeks","bodyfat_range":"e.g. 10-12%","scores":{"overall":n,"shoulders":n,"chest":n,"arms":n,"back":n,"legs":n,"core_leanness":n,"symmetry":n}}`;
+Reply with only JSON: {"summary":"2-3 sentences","vs_last":"what changed since last check-in, or empty if first","wins":["..."],"improve":["specific fixes for training, nutrition or posture"],"focus_next":"one sentence on the priority for the next 4 weeks","bodyfat_range":"e.g. 10-12%","scores":{"overall":n,"shoulders":n,"chest":n,"arms":n,"arm_left":n,"arm_right":n,"back":n,"legs":n,"calves":n,"core_leanness":n,"symmetry":n}} (arm_left/arm_right = his left and right arm, not the viewer's; null for anything not visible)`;
     const r=await sample.json(prompt,{images:send,cache:false});
     const sc={};Object.entries((r&&r.scores)||{}).forEach(([k,v])=>{const n=+v;if(n>=1&&n<=10)sc[k]=r1(n)});
     const ci={id:uid(),date:TODAY,photoIds:ids,trained:sh.trained||'',summary:String(r.summary||''),vs:String(r.vs_last||''),wins:(r.wins||[]).map(String).slice(0,5),improve:(r.improve||[]).map(String).slice(0,6),focus:String(r.focus_next||''),bf:String(r.bodyfat_range||''),scores:sc};
@@ -2724,7 +2739,7 @@ SHEETS.ciView=()=>{const ci=(S.core.checkins||[]).find(x=>x.id===SH.id);if(!ci)r
 A.openCi=el=>{UI.confirm=null;loadPhotos().then(()=>openSheet({type:'ciView',id:el.dataset.id}))};
 A.askDelCi=()=>{UI.confirm='ci';renderSheet()};
 A.delCheckin=async()=>{const ci=S.core.checkins.find(x=>x.id===SH.id);S.core.checkins=S.core.checkins.filter(x=>x.id!==SH.id);saveCore();UI.confirm=null;closeSheet();for(const id of (ci&&ci.photoIds)||[]){try{await delPhoto(id)}catch(e){}}toast('Check-in deleted')};
-const SCORE_KEYS=[['overall','Overall'],['shoulders','Shoulders'],['chest','Chest'],['arms','Arms'],['back','Back'],['legs','Legs'],['core_leanness','Leanness'],['symmetry','Symmetry']];
+const SCORE_KEYS=[['overall','Overall'],['shoulders','Shoulders'],['chest','Chest'],['arms','Arms'],['arm_left','Left arm'],['arm_right','Right arm'],['back','Back'],['legs','Legs'],['calves','Calves'],['core_leanness','Leanness'],['symmetry','Symmetry']];
 function scoreBars(sc,prev){return `<div class="stack" style="gap:10px">${SCORE_KEYS.filter(([k])=>sc&&sc[k]!=null).map(([k,l])=>`<div class="hbar"><div class="lab">${l}<span>${sc[k]}/10${prev&&prev[k]!=null?` <em class="${sc[k]>prev[k]?'up':sc[k]<prev[k]?'dn':''}">${sc[k]>prev[k]?'▲':sc[k]<prev[k]?'▼':'•'} ${r1(Math.abs(sc[k]-prev[k]))||''}</em>`:''}</span></div>${bar(sc[k],10,k==='overall'?'big neon':'')}</div>`).join('')}</div>`}
 
 /* ---------- Progress page ---------- */
@@ -2760,6 +2775,124 @@ function sparkNeon(pts,color='#00D4FF',label=''){
   const d=pts.map(([k,v],i)=>`${i?'L':'M'}${X(k).toFixed(1)},${Y(v).toFixed(1)}`).join('');
   return `<svg class="chart" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}"><defs><filter id="glowC" x="-20%" y="-50%" width="140%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><path d="${d}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" filter="url(#glowC)"/>${pts.map(([k,v])=>`<circle cx="${X(k)}" cy="${Y(v)}" r="3.4" fill="${color}"/>`).join('')}<text x="${p}" y="${h-3}" fill="#8FA9D2" font-size="10.5" font-family="Archivo">${shortDate(xs[0])}</text><text x="${w-p}" y="${h-3}" text-anchor="end" fill="#8FA9D2" font-size="10.5" font-family="Archivo">${shortDate(xs[xs.length-1])}</text></svg>`;
 }
+/* ---------- Exercise pictures + progress per lift ----------
+   Pictures: Free Exercise DB (public domain, github.com/yuhonas/free-exercise-db), index in /exercises.json. */
+let EXDB=null,EXDB_P=null;const EXM=new Map();
+function loadExDb(){if(EXDB_P)return EXDB_P;EXDB_P=fetch('/exercises.json').then(r=>r.ok?r.json():null).then(j=>{if(j&&Array.isArray(j.list)){EXDB=j;EXDB.by=new Map(j.list.map(x=>[x.i,x]));EXM.clear();render();if(SH&&SH.type==='exercise')renderSheet()}return EXDB}).catch(()=>null);return EXDB_P}
+const EX_ALIAS=[
+ [/hammer.*(cable|rope)|rope hammer/,'Cable_Hammer_Curls_-_Rope_Attachment'],[/hammer/,'Hammer_Curls'],[/preacher/,'Preacher_Curl'],[/incline.*curl/,'Incline_Dumbbell_Curl'],[/concentration/,'Concentration_Curls'],
+ [/seated.*(leg|ham).*curl/,'Seated_Leg_Curl'],[/(leg|ham(string)?) curl/,'Lying_Leg_Curls'],[/(db|dumbbell).*curl|curl.*(db|dumbbell)/,'Dumbbell_Bicep_Curl'],[/curl/,'Barbell_Curl'],
+ [/skull|lying tri/,'EZ-Bar_Skullcrusher'],[/rope.*(pushdown|pressdown)|(pushdown|pressdown).*rope/,'Triceps_Pushdown_-_Rope_Attachment'],[/pushdown|pressdown|tricep push/,'Triceps_Pushdown'],[/overhead.*(tri|extension)|tri.*overhead/,'Cable_Rope_Overhead_Triceps_Extension'],[/close grip bench/,'Close-Grip_Barbell_Bench_Press'],[/(tri|bench) dip/,'Dips_-_Triceps_Version'],[/\bdips?\b/,'Dips_-_Chest_Version'],[/tricep/,'Triceps_Pushdown'],
+ [/rear delt.*cable|cable.*rear delt/,'Cable_Rear_Delt_Fly'],[/rear delt.*(fly|machine|pec deck)|(reverse|rear).*(pec deck|machine fly)|reverse pec|pec deck.*rear|rear delt.*(on|with) .*(machine|fly)/,'Reverse_Machine_Flyes'],[/rear delt|reverse fly/,'Reverse_Flyes'],[/face pull/,'Face_Pull'],
+ [/cable.*lateral|lateral.*cable/,'Cable_Seated_Lateral_Raise'],[/lateral|side raise|lat raise/,'Side_Lateral_Raise'],[/arnold/,'Arnold_Dumbbell_Press'],[/upright/,'Upright_Barbell_Row'],[/(db|dumbbell).*shrug/,'Dumbbell_Shrug'],[/shrug/,'Barbell_Shrug'],
+ [/machine.*(shoulder|overhead|military)|(shoulder|overhead).*machine/,'Machine_Shoulder_Military_Press'],[/(db|dumbbell).*(shoulder|overhead) press|(shoulder|overhead) press.*(db|dumbbell)/,'Dumbbell_Shoulder_Press'],[/seated.*(military|overhead|shoulder) press/,'Seated_Barbell_Military_Press'],[/military|overhead press|\bohp\b|shoulder press/,'Standing_Military_Press'],
+ [/seated calf/,'Seated_Calf_Raise'],[/calf|calves/,'Standing_Calf_Raises'],[/leg press/,'Leg_Press'],[/(leg|quad) ext/,'Leg_Extensions'],[/hack/,'Hack_Squat'],[/bulgarian|split squat/,'Split_Squat_with_Dumbbells'],[/goblet/,'Goblet_Squat'],[/front squat/,'Front_Barbell_Squat'],[/zercher/,'Zercher_Squats'],[/farmer/,'Farmers_Walk'],[/smith.*squat/,'Smith_Machine_Squat'],[/squat/,'Barbell_Squat'],
+ [/hip thrust|glute bridge/,'Barbell_Hip_Thrust'],[/barbell lunge/,'Barbell_Lunge'],[/lunge/,'Dumbbell_Lunges'],[/step up/,'Dumbbell_Step_Ups'],[/(db|dumbbell).*(rdl|romanian|stiff)/,'Stiff-Legged_Dumbbell_Deadlift'],[/\brdl\b|romanian|stiff leg/,'Romanian_Deadlift'],[/sumo/,'Sumo_Deadlift'],[/trap bar|hex bar/,'Trap_Bar_Deadlift'],[/rack pull/,'Rack_Pulls'],[/deadlift/,'Barbell_Deadlift'],[/good morning/,'Good_Morning'],[/glute ham|nordic/,'Glute_Ham_Raise'],
+ [/chin up/,'Chin-Up'],[/pull up/,'Pullups'],[/straight arm|pullover/,'Straight-Arm_Pulldown'],[/(close|v bar|neutral).*pulldown/,'Close-Grip_Front_Lat_Pulldown'],[/pulldown|pull down/,'Wide-Grip_Lat_Pulldown'],[/t bar/,'T-Bar_Row_with_Handle'],[/seated.*row|cable row|row.*cable/,'Seated_Cable_Rows'],[/(db|dumbbell|one arm|single arm).*row/,'One-Arm_Dumbbell_Row'],[/\brows?\b/,'Bent_Over_Barbell_Row'],
+ [/pec deck|chest fly machine|machine (chest )?fly|butterfly/,'Butterfly'],[/cable (chest )?fly|crossover/,'Cable_Crossover'],[/incline.*(db|dumbbell).*fly/,'Incline_Dumbbell_Flyes'],[/(db|dumbbell) fly|chest fly|\bfly\b/,'Dumbbell_Flyes'],
+ [/incline.*(db|dumbbell)|(db|dumbbell).*incline/,'Incline_Dumbbell_Press'],[/incline.*(machine|hammer)|machine incline/,'Leverage_Incline_Chest_Press'],[/incline/,'Barbell_Incline_Bench_Press_-_Medium_Grip'],[/decline/,'Decline_Barbell_Bench_Press'],[/smith.*bench|bench.*smith/,'Smith_Machine_Bench_Press'],[/(db|dumbbell).*(bench|press)/,'Dumbbell_Bench_Press'],[/chest press|machine (bench|press)/,'Leverage_Chest_Press'],[/bench/,'Barbell_Bench_Press_-_Medium_Grip'],[/push up/,'Pushups'],
+ [/cable crunch/,'Cable_Crunch'],[/crunch|sit up/,'Crunches'],[/leg raise/,'Hanging_Leg_Raise'],[/plank/,'Plank'],[/ab (wheel|roller)/,'Ab_Roller'],
+];
+function exNorm(n){return String(n||'').toLowerCase().replace(/dumbbells?/g,'dumbbell').replace(/\bdbs?\b/g,'db').replace(/fl(y|i)e?s\b|flyes?\b/g,'fly').replace(/delts?\b/g,'delt').replace(/raises\b/g,'raise').replace(/[-_/]/g,' ').replace(/[^a-z0-9 ]/g,'').replace(/\bpull ?ups?\b/g,'pull up').replace(/\bchin ?ups?\b/g,'chin up').replace(/\bpush ?ups?\b/g,'push up').replace(/\bsit ?ups?\b/g,'sit up').replace(/\bstep ?ups?\b/g,'step up').replace(/\s+/g,' ').trim()}
+const EX_STOP=new Set(['the','a','with','on','and','of','to','machine','barbell','db','dumbbell','cable','seated','standing','grip','medium','press','set','sets']);
+function exMatch(name){const n=exNorm(name);if(!n)return null;if(EXM.has(n))return EXM.get(n);if(!EXDB)return null;
+  let hit=null;for(const[re,id]of EX_ALIAS)if(re.test(n)){hit=EXDB.by.get(id)||null;if(hit)break}
+  if(!hit){const tk=n.split(' ').filter(w=>w.length>2);let best=0;for(const x of EXDB.list){const xt=exNorm(x.n).split(' ');const core=tk.filter(w=>!EX_STOP.has(w));if(!core.some(w=>xt.includes(w)))continue;const inter=tk.filter(w=>xt.includes(w)).length;const sc=inter/Math.max(tk.length,xt.length);if(sc>best){best=sc;hit=x}}if(best<.5)hit=null}
+  EXM.set(n,hit);return hit}
+function exImg(id,f){const c=(EXDB&&EXDB.commit)||'main';return[`https://cdn.jsdelivr.net/gh/yuhonas/free-exercise-db@${c}/exercises/${id}/${f}.jpg`,`https://raw.githubusercontent.com/yuhonas/free-exercise-db/${c}/exercises/${id}/${f}.jpg`]}
+function exImgTag(id,f,cls,alt){const[a,b]=exImg(id,f);return `<img class="${cls||''}" src="${a}" data-alt-src="${b}" alt="${esc(alt||'')}" loading="lazy" onerror="if(this.dataset.altSrc){this.src=this.dataset.altSrc;this.dataset.altSrc=''}else{this.remove()}">`}
+function exKey(name){const m=exMatch(name);return m?'id:'+m.i:'n:'+exNorm(name)}
+/* One point per day for this lift: best set by estimated max (or most reps when there's no weight). */
+function exSessions(key){const by={};for(const m of Object.keys(S.months))for(const[k,x]of Object.entries(S.months[m].days||{}))(x.workouts||[]).forEach(wo=>(wo.ex||[]).forEach(e=>{if(!e||!e.name||exKey(e.name)!==key)return;const it={k,w:+e.w||0,reps:+e.reps||0,sets:+e.sets||0,v:e1rm(+e.w,+e.reps)};const o=by[k];if(!o||it.v>o.v||(!it.v&&!o.v&&it.reps>o.reps))by[k]=it}));return Object.values(by).sort((a,b)=>a.k<b.k?-1:1)}
+function exRef(ss,k,lo,hi){return ss.filter(s=>s.k>=addD(k,-hi)&&s.k<=addD(k,-lo)).pop()||null}
+function exCmp(cur,ref){if(!cur||!ref)return null;
+  if(cur.w&&ref.w){const dw=r1(cur.w-ref.w),dr=cur.reps-ref.reps,dv=cur.v-ref.v;return{up:dv>0.5,down:dv<-0.5,label:dw?`${dw>0?'+':''}${dw} lb`:dr?`${dr>0?'+':''}${dr} rep${Math.abs(dr)===1?'':'s'}`:'same',pct:ref.v?dv/ref.v*100:0,from:`${ref.w}×${ref.reps}`,to:`${cur.w}×${cur.reps}`}}
+  if(cur.reps&&ref.reps){const dr=cur.reps-ref.reps;return{up:dr>0,down:dr<0,label:dr?`${dr>0?'+':''}${dr} reps`:'same',pct:dr/ref.reps*100,from:`${ref.reps} reps`,to:`${cur.reps} reps`}}return null}
+function exProgress(name,k){const key=exKey(name),ss=exSessions(key),cur=ss.find(s=>s.k===k)||ss.filter(s=>s.k<=k).pop();if(!cur)return{ss};
+  const before=ss.filter(s=>s.k<cur.k);const wk=exRef(ss,cur.k,5,13),mo=exRef(ss,cur.k,21,45);
+  return{ss,cur,week:exCmp(cur,wk),month:exCmp(cur,mo),last:exCmp(cur,before[before.length-1]),wkRef:wk,moRef:mo}}
+function exBadge(p){const c=p.week||p.last;if(!c)return '<span class="wx-d new">New</span>';return `<span class="wx-d ${c.up?'up':c.down?'dn':''}">${c.up?'▲':c.down?'▼':'•'} ${esc(c.label)}<small>${p.week?'vs last week':'vs last time'}</small></span>`}
+function exRow(e,k){loadExDb();const m=exMatch(e.name),p=exProgress(e.name,k);
+  return `<button class="wx" data-a="exOpen" data-n="${esc(e.name)}" data-k="${k}" aria-label="${esc(e.name)} details">${m?`<span class="wx-img">${exImgTag(m.i,0,'','')}</span>`:`<span class="wx-img none">${I.bolt||''}</span>`}<span class="wx-t"><b>${esc(e.name)}</b><em>${e.sets||'?'} × ${e.reps||'?'}${e.w?' · '+e.w+' lb':''}</em></span>${exBadge(p)}</button>`}
+A.exOpen=el=>openSheet({type:'exercise',n:el.dataset.n,k:el.dataset.k});
+SHEETS.exercise=()=>{const name=SH.n,k=SH.k,m=exMatch(name),p=exProgress(name,k);
+  const day=dayR(k),done=[];(day.workouts||[]).forEach(w=>(w.ex||[]).forEach(e=>{if(exKey(e.name)===exKey(name))done.push(e)}));
+  const row=(l,c,ref)=>`<div class="li"><div class="main"><b>${l}</b><span>${c?`${esc(c.from)} → ${esc(c.to)}${ref?' · '+shortDate(ref.k):''}`:'No session to compare yet'}</span></div><div class="end ${c&&c.up?'up':c&&c.down?'dn':''}">${c?`${c.up?'▲':c.down?'▼':'•'} ${esc(c.label)}`:'—'}<span>${c&&c.pct?`${c.pct>0?'+':''}${Math.round(c.pct)}% ${p.cur&&p.cur.w?'est. max':''}`:''}</span></div></div>`;
+  const pts=p.ss.filter(s=>s.k>=addD(k,-120)).map(s=>[s.k,Math.round(s.v||s.reps)]);
+  return `${sheetHead(name)}
+  ${m?`<div class="ex-hero">${exImgTag(m.i,0,'a',m.n+', start position')}${exImgTag(m.i,1,'b',m.n+', end position')}</div><p class="tiny muted" style="margin:0">${esc(m.n)} · ${esc([...m.m,...m.s].join(', '))}${m.e?' · '+esc(m.e):''}</p>`:`<p class="note">${EXDB?'No picture found for this name yet. Try a common name, like "rear delt fly" or "incline dumbbell press".':'Loading pictures…'}</p>`}
+  <section class="card"><span class="eyebrow">What you did · ${relDay(k)}</span>${done.length?done.map(e=>`<div class="display" style="font-size:22px">${e.sets||'?'} sets × ${e.reps||'?'} reps${e.w?` @ ${e.w} lb`:''}</div>`).join(''):'<p class="small muted">Not logged that day.</p>'}${p.cur&&p.cur.w?`<p class="tiny muted" style="margin:4px 0 0">Best set estimates a 1-rep max of about ${Math.round(p.cur.v)} lb.</p>`:''}</section>
+  <section class="card"><span class="eyebrow">How much you improved</span><div class="list">${row('Past week',p.week,p.wkRef)}${row('Past month',p.month,p.moRef)}</div>
+  ${pts.length>1?sparkNeon(pts,'#00D4FF',name+(p.cur&&p.cur.w?' estimated one-rep max':' reps')):''}<p class="tiny muted" style="margin:0">Compares your best set with the closest session about 1 week (5-13 days) and 1 month (3-6 weeks) earlier.</p></section>
+  ${m&&m.c?`<p class="small muted" style="margin:0"><b>How to:</b> ${esc(m.c)}</p>`:''}
+  <button class="btn ghost" data-a="askCoach" data-v="${esc(`Look at my ${name} history and tell me how it's progressing and what to do next session.`)}">${I.bolt} Ask ${esc(pname('trainer'))} about this lift</button>
+  ${m?'<p class="tiny muted" style="margin:0">Exercise photos: Free Exercise DB (public domain).</p>':''}`};
+
+/* ---------- Where you grew: photo scores + tape measurements over a period ---------- */
+const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:null;
+const GROW_REGIONS=[['shoulders','Shoulders','shoulders'],['chest','Chest','chest'],['arm_left','Left arm','armL'],['arm_right','Right arm','armR'],['back','Back',null],['core_leanness','Abs / leanness',null],['legs','Legs','thigh'],['calves','Calves','calf']];
+const MEAS=[['shoulders','Shoulders'],['chest','Chest'],['armL','Left arm'],['armR','Right arm'],['waist','Waist'],['thighL','Left thigh'],['thighR','Right thigh'],['calf','Calves']];
+function measSeries(key,from){const out=[];for(const m of Object.keys(S.months))for(const[k,x]of Object.entries(S.months[m].days||{})){if(k<from||k>TODAY)continue;let v=null;if(key==='waist')v=x.waist;else if(key==='thigh'){const a=x.meas&&x.meas.thighL,b=x.meas&&x.meas.thighR;v=a&&b?(a+b)/2:a||b||null}else v=x.meas&&x.meas[key];if(v)out.push([k,+v])}return out.sort((a,b)=>a[0]<b[0]?-1:1)}
+function growth(days){const from=days?addD(TODAY,-days):'0000';
+  const pts=[...(S.core.checkins||[]).filter(c=>c.date>=from).map(c=>[c.date,c.scores||{}]),...brain().photos.filter(p=>p.type==='progress'&&p.sc&&p.date>=from).map(p=>[p.date,p.sc])].sort((a,b)=>a[0]<b[0]?-1:1);
+  const rows=GROW_REGIONS.map(([key,label,mk])=>{
+    let vals=pts.filter(([,sc])=>sc[key]!=null).map(([k,sc])=>[k,+sc[key]]);
+    if(!vals.length&&(key==='arm_left'||key==='arm_right'))vals=pts.filter(([,sc])=>sc.arms!=null).map(([k,sc])=>[k,+sc.arms]);
+    let sd=null,sFrom=null,sTo=null;
+    if(vals.length>=2&&vals[0][0]!==vals[vals.length-1][0]){const n=Math.max(1,Math.min(3,Math.floor(vals.length/2)));const a=vals.slice(0,n),b=vals.slice(-n);sFrom=mean(a.map(x=>x[1]));sTo=mean(b.map(x=>x[1]));sd=r1(sTo-sFrom)}
+    let md=null,mFrom=null,mTo=null;if(mk){const ms=measSeries(mk,from);if(ms.length>=2){mFrom=ms[0];mTo=ms[ms.length-1];md=Math.round((mTo[1]-mFrom[1])*100)/100}}
+    const st=md!=null?(md>=0.25?'up':md<=-0.25?'dn':'flat'):sd!=null?(sd>=0.5?'up':sd<=-0.5?'dn':'flat'):'none';
+    return{key,label,sd,sFrom,sTo,md,mFrom,mTo,st,n:vals.length}});
+  const ws=measSeries('waist',from),waist=ws.length>=2?Math.round((ws[ws.length-1][1]-ws[0][1])*100)/100:null;
+  const W=weights().filter(([k])=>k>=from),wd=W.length>=2?r1(avg7(weights(),W[W.length-1][0])-avg7(weights(),W[0][0])):null;
+  return{from,rows,waist,wd,pts:pts.length}}
+function growthText(days){const g=growth(days);const L=[`Since ${g.from==='0000'?'the start':g.from}: ${g.pts} scored photos/check-ins.${g.wd!=null?` Weight ${g.wd>=0?'+':''}${g.wd} lb (7-day avg).`:''}${g.waist!=null?` Waist ${g.waist>=0?'+':''}${g.waist} in.`:''}`];
+  g.rows.forEach(r=>{if(r.st==='none')return;L.push(`${r.label}: ${r.md!=null?`${r.md>=0?'+':''}${r.md} in by tape (${r.mFrom[1]}→${r.mTo[1]})`:''}${r.md!=null&&r.sd!=null?'; ':''}${r.sd!=null?`photo score ${r.sFrom.toFixed(1)}→${r.sTo.toFixed(1)} (${r.sd>=0?'+':''}${r.sd})`:''}`)});
+  L.push('(Tape inches are real measurements; photo scores are AI estimates from pictures. Muscle gained per body part in pounds cannot be measured from photos.)');return L.join('\n')}
+function bodyMap(rows){const st=Object.fromEntries(rows.map(r=>[r.key,r]));
+  const col=k=>{const r=st[k];if(!r||r.st==='none')return 'rgba(141,187,255,.10)';const mag=r.md!=null?Math.min(1,Math.abs(r.md)/1):Math.min(1,Math.abs(r.sd||0)/1.5);if(r.st==='up')return `rgba(61,245,164,${(.35+.6*mag).toFixed(2)})`;if(r.st==='dn')return `rgba(255,59,92,${(.35+.55*mag).toFixed(2)})`;return 'rgba(141,187,255,.28)'};
+  const gl=k=>st[k]&&st[k].st==='up'?' filter="url(#gmGlow)"':'';const t=k=>st[k]?`<title>${esc(st[k].label)}</title>`:'';
+  return `<svg class="bodymap" viewBox="0 0 200 360" role="img" aria-label="Body map of where you grew"><defs><filter id="gmGlow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+  <g fill="rgba(141,187,255,.06)" stroke="rgba(141,187,255,.35)" stroke-width="1.2"><circle cx="100" cy="30" r="19"/><path d="M90 48h20v14H90z"/><path d="M64 70 Q100 58 136 70 L130 178 Q100 190 70 178 Z"/><path d="M70 178 Q100 192 130 178 L134 200 L66 200 Z"/><ellipse cx="44" cy="178" rx="9" ry="25"/><ellipse cx="156" cy="178" rx="9" ry="25"/></g>
+  <g stroke="rgba(255,255,255,.25)" stroke-width="1">
+  <ellipse cx="62" cy="80" rx="17" ry="14" fill="${col('shoulders')}"${gl('shoulders')}>${t('shoulders')}</ellipse><ellipse cx="138" cy="80" rx="17" ry="14" fill="${col('shoulders')}"${gl('shoulders')}>${t('shoulders')}</ellipse>
+  <path d="M74 76 Q86 72 99 76 L99 108 Q86 114 74 104 Z" fill="${col('chest')}"${gl('chest')}>${t('chest')}</path><path d="M126 76 Q114 72 101 76 L101 108 Q114 114 126 104 Z" fill="${col('chest')}"${gl('chest')}>${t('chest')}</path>
+  <ellipse cx="49" cy="122" rx="11" ry="26" fill="${col('arm_right')}"${gl('arm_right')}>${t('arm_right')}</ellipse><ellipse cx="151" cy="122" rx="11" ry="26" fill="${col('arm_left')}"${gl('arm_left')}>${t('arm_left')}</ellipse>
+  <rect x="82" y="114" width="36" height="60" rx="10" fill="${col('core_leanness')}"${gl('core_leanness')}>${t('core_leanness')}</rect>
+  <ellipse cx="83" cy="244" rx="16" ry="42" fill="${col('legs')}"${gl('legs')}>${t('legs')}</ellipse><ellipse cx="117" cy="244" rx="16" ry="42" fill="${col('legs')}"${gl('legs')}>${t('legs')}</ellipse>
+  <ellipse cx="83" cy="318" rx="10" ry="27" fill="${col('calves')}"${gl('calves')}>${t('calves')}</ellipse><ellipse cx="117" cy="318" rx="10" ry="27" fill="${col('calves')}"${gl('calves')}>${t('calves')}</ellipse></g>
+  <text x="18" y="22" fill="#8FA9D2" font-size="11" font-family="Archivo">R</text><text x="176" y="22" fill="#8FA9D2" font-size="11" font-family="Archivo">L</text></svg>`}
+function growthCard(){const days=UI.growDays==null?60:UI.growDays,g=growth(days);const any=g.rows.some(r=>r.st!=='none');
+  const P=[[14,'2 wks'],[30,'1 mo'],[60,'2 mo'],[90,'3 mo'],[0,'All']];
+  return `<section class="card"><div class="card-head"><div class="t"><h2>WHERE YOU GREW</h2></div><button class="btn sm ghost" data-a="measure">${I.ruler||''} Measure</button></div>
+  <div class="chips">${P.map(([d,l])=>`<button class="chip ${d===days?'on':''}" data-a="growPick" data-v="${d}">${l}</button>`).join('')}</div>
+  ${any?`<div class="grow"><div>${bodyMap(g.rows)}<div class="legend"><span><i style="background:#3DF5A4"></i>Grew</span><span><i style="background:rgba(141,187,255,.5)"></i>Same</span><span><i style="background:#FF3B5C"></i>Down</span></div></div>
+  <div class="list">${g.rows.filter(r=>r.st!=='none').map(r=>`<div class="li"><div class="main"><b>${esc(r.label)}</b><span>${r.md!=null?`${r.mFrom[1]}" → ${r.mTo[1]}" tape`:''}${r.md!=null&&r.sd!=null?' · ':''}${r.sd!=null?`score ${r.sFrom.toFixed(1)} → ${r.sTo.toFixed(1)}`:''}</span></div><div class="end ${r.st}">${r.md!=null?`${r.md>0?'+':''}${r.md}"`:`${r.sd>0?'+':''}${r.sd}`}<span>${r.st==='up'?'grew':r.st==='dn'?'down':'same'}</span></div></div>`).join('')}</div></div>
+  ${g.waist!=null||g.wd!=null?`<p class="small" style="margin:0">${g.wd!=null?`Weight ${g.wd>=0?'+':''}${g.wd} lb`:''}${g.waist!=null?`${g.wd!=null?' · ':''}Waist ${g.waist>=0?'+':''}${g.waist}"`:''}</p>`:''}`
+  :`<p class="note">Send a physique photo (here, in chat or on a call) every day or every few days, same pose and light. Each one gets scored muscle by muscle, and this map shows where you grew. For exact numbers, measure with a tape once a week.</p>`}
+  <div class="row" style="gap:8px;flex-wrap:wrap"><button class="btn sm ghost" data-a="timelapse">${I.cam} Play photo time-lapse</button><button class="btn sm ghost" data-a="askCoach" data-v="${esc(`Look at where I grew over the last ${days?days+' days':'whole time'} (lookup growth) and tell me what is working and what to bring up next.`)}">${I.bolt} Ask ${esc(pname('trainer'))}</button></div>
+  <p class="tiny muted" style="margin:0">Tape inches are real measurements. Photo scores are AI estimates; lighting, pump and angle move them, so trends over weeks matter. Pounds of muscle per body part can't be measured from photos.</p></section>`}
+A.growPick=el=>{UI.growDays=+el.dataset.v;render()};
+SHEETS.measure=()=>{const d=dayR(SH.date),m=d.meas||{};return `${sheetHead('Measurements')}
+  <label class="field"><span>DATE</span><input class="in" type="date" id="ms-date" value="${SH.date}" max="${TODAY}"></label>
+  <div class="grid2">${MEAS.map(([k,l])=>`<label class="field"><span>${l.toUpperCase()} (IN)</span><input class="in num" data-ms="${k}" inputmode="decimal" value="${k==='waist'?(d.waist||''):(m[k]||'')}" placeholder="—"></label>`).join('')}</div>
+  <p class="tiny muted">Measure in the morning, relaxed, same spot each time: shoulders around the widest point, chest at the nipples, arms at the peak unflexed, thighs at the widest, calves at the widest, waist at the navel. Once a week is plenty.</p>
+  <button class="btn" data-a="measSave">Save measurements</button>`};
+A.measure=()=>openSheet({type:'measure',date:TODAY});
+A.measSave=()=>{const k=($('#ms-date').value||TODAY)>TODAY?TODAY:($('#ms-date').value||TODAY);const d=dayW(k);d.meas=d.meas||{};let n=0;
+  document.querySelectorAll('[data-ms]').forEach(x=>{const v=num(x.value),key=x.dataset.ms;if(v==null||!(v>4&&v<90))return;n++;if(key==='waist')d.waist=r1(v);else d.meas[key]=Math.round(v*4)/4});
+  if(!n){toast('Enter at least one measurement in inches.');return}if(!Object.keys(d.meas).length)delete d.meas;saveDay(k);closeSheet();toast('Measurements saved')};
+SHEETS.timelapse=()=>{const L=SH.list||[];const p=L[SH.i||0];if(!p)return `${sheetHead('Time-lapse')}<p class="note">${SH.loading?'Loading photos…':'Add a few progress photos of the same pose to see a time-lapse.'}</p>`;
+  const poses=[...new Set((PHOTOS||[]).filter(x=>x.type==='progress').map(x=>x.pose||'other'))];
+  return `${sheetHead('Time-lapse')}<div class="chips">${poses.map(x=>`<button class="chip ${x===SH.pose?'on':''}" data-a="tlPose" data-v="${esc(x)}">${esc(x)}</button>`).join('')}</div>
+  <img src="${p.img}" alt="Progress photo ${shortDate(p.date)}" style="width:100%;aspect-ratio:3/4;object-fit:cover;border-radius:18px"><div class="row between"><b>${longDate(p.date)}</b><span class="tiny muted">${(SH.i||0)+1} of ${L.length}</span></div>
+  <button class="btn ghost" data-a="tlToggle">${SH.play?'Pause':'Play'}</button>`};
+function tlList(pose){return (PHOTOS||[]).filter(x=>x.type==='progress'&&(x.pose||'other')===pose).sort((a,b)=>a.date<b.date?-1:1)}
+function tlRun(){clearInterval(UI.tlT);UI.tlT=setInterval(()=>{if(!SH||SH.type!=='timelapse'){clearInterval(UI.tlT);return}if(!SH.play||!SH.list.length)return;SH.i=((SH.i||0)+1)%SH.list.length;renderSheet()},700)}
+A.timelapse=async()=>{openSheet({type:'timelapse',list:[],i:0,play:true,loading:true});await loadPhotos();if(!SH||SH.type!=='timelapse')return;const prog=(PHOTOS||[]).filter(x=>x.type==='progress');const cnt={};prog.forEach(x=>{const k=x.pose||'other';cnt[k]=(cnt[k]||0)+1});const pose=Object.keys(cnt).sort((a,b)=>cnt[b]-cnt[a])[0]||'front';SH.pose=pose;SH.list=tlList(pose);SH.loading=false;renderSheet();tlRun()};
+A.tlPose=el=>{SH.pose=el.dataset.v;SH.list=tlList(SH.pose);SH.i=0;renderSheet()};
+A.tlToggle=()=>{SH.play=!SH.play;renderSheet()};
+
 V.progress=()=>{
   const c=S.core,W=weights(),cur=avg7(W),g=c.goal,gained=cur!=null&&g.startWeight?cur-g.startWeight:null,co=coach(W);
   const cis=c.checkins||[],first=cis[0],last=cis[cis.length-1];
@@ -2782,6 +2915,7 @@ V.progress=()=>{
     <div class="list">${cis.slice().reverse().map(x=>`<button class="li" data-a="openCi" data-id="${x.id}"><div class="main"><b>${longDate(x.date)}</b><span>${esc((x.summary||'').slice(0,90))}${(x.summary||'').length>90?'…':''}</span></div><div class="end">${x.scores.overall!=null?x.scores.overall+'/10':''}<span>${esc(x.bf||'')}</span></div></button>`).join('')}</div>
     ${first&&last&&first!==last?`<button class="btn ghost" data-a="compare">Compare first vs latest</button>`:''}`:`<p class="note">Send Coach 1–3 photos every 2 weeks. It scores each body part, estimates body-fat, and compares you with last time so you can see real change.</p>`}
   </section>
+  ${growthCard()}
   <section class="card"><div class="card-head"><div class="t"><h2>STRENGTH</h2></div></div>
     ${sd.length?`<div class="chips scroll-chips">${sd.slice(0,10).map(x=>`<button class="chip ${x.name===UI.lift?'on':''}" data-a="liftPick" data-v="${esc(x.name)}">${esc(x.name)}</button>`).join('')}</div>${sparkNeon(lift.pts.map(([k,v])=>[k,Math.round(v)]),'#00D4FF',lift.name+' estimated one-rep max')}<p class="tiny muted">Estimated 1-rep max from your best set each day. Tell Coach your sets ("bench 185 x 8, 3 sets") and they land here.</p>`:`<p class="note">Tell Coach what you lifted, like "incline 70s for 3x10, dips +45 x 8". It logs it and your strength lines appear here.</p><button class="btn ghost" data-a="askCoach" data-v="I want to log today's workout.">Log a workout with Coach</button>`}
   </section>
@@ -3230,7 +3364,7 @@ function quickRow(){const q=[['logFood',I.fork,'Food'],['weighIn',I.scale,'Weigh
 A.quickPhoto=()=>{UI.bodyTab='progress';go('body');setTimeout(()=>{const s=$('#photos-progress');if(s)s.scrollIntoView({behavior:'smooth',block:'center'})},200)};
 
 /* ================= Workouts page ================= */
-V.workouts=()=>{
+V.workouts=()=>{loadExDb();
   const c=S.core,wp=(c.wplan||{})[TODAY],tm=(c.wplan||{})[addD(TODAY,1)],d=dayR(TODAY);const ws=weekKeys(weekStart(TODAY));
   const recent=recentWorkouts(14);
   return `${head('WORKOUTS')}${agentCard('trainer')}
@@ -3243,7 +3377,7 @@ V.workouts=()=>{
     <div class="stack" style="gap:10px">${recent.filter(([k])=>k!==TODAY).map(([k,w])=>woCard(w,k)).join('')||'<div class="empty">Logged workouts show up here.</div>'}</div></section>`;
 };
 function woCard(w,k){return `<div class="wo"><div class="row between"><div><b>${esc(w.title)}</b><div class="tiny muted">${relDay(k)}</div></div><div class="row" style="gap:6px"><button class="icon-btn sm" data-a="logWorkout" data-id="${w.id}" data-k="${k}" aria-label="Edit workout">${I.edit}</button><button class="icon-btn sm" data-a="delWorkout" data-id="${w.id}" data-k="${k}" aria-label="Delete workout">${I.trash}</button></div></div>
-  ${(w.ex||[]).length?`<div class="wo-ex">${w.ex.map(e=>`<span>${esc(e.name)}</span><em>${e.sets||'?'}×${e.reps||'?'}${e.w?' · '+e.w+' lb':''}</em>`).join('')}</div>`:''}${w.notes?`<p class="tiny muted" style="margin:6px 0 0">${esc(w.notes)}</p>`:''}</div>`}
+  ${(w.ex||[]).length?`<div class="wx-list">${w.ex.map(e=>exRow(e,k)).join('')}</div>`:''}${w.notes?`<p class="tiny muted" style="margin:6px 0 0">${esc(w.notes)}</p>`:''}</div>`}
 SHEETS.workout=()=>`${sheetHead(SH.id?'Edit workout':'Log workout')}
   <label class="field"><span>DATE</span><input class="in" type="date" id="wo-date" value="${SH.k}" max="${TODAY}"></label>
   <label class="field"><span>WORKOUT</span><input class="in" id="wo-title" value="${esc(SH.w.title)}" placeholder="e.g. Push day" maxlength="60"></label>

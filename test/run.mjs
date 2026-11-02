@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 let pw; try { pw = require('playwright'); } catch { pw = require('/tmp/node_modules/playwright'); }
 
-const types = { '.html': 'text/html', '.js': 'application/javascript', '.webmanifest': 'application/manifest+json', '.png': 'image/png' };
+const types = { '.html': 'text/html', '.js': 'application/javascript', '.webmanifest': 'application/manifest+json', '.png': 'image/png', '.json': 'application/json' };
 const srv = createServer((req, res) => {
   let p = new URL(req.url, 'http://x').pathname; if (p === '/') p = '/index.html';
   const f = 'public' + p; if (!existsSync(f)) { res.statusCode = 404; return res.end(); }
@@ -25,6 +25,7 @@ const page = await ctx.newPage();
 const errs = []; page.on('pageerror', e => errs.push(e.message)); page.on('console', m => { if (m.type() === 'error') errs.push('console: ' + m.text()); });
 page.on('pageerror', e => log('  [pageerror]', e.message));
 
+await page.route(/cdn\.jsdelivr\.net|raw\.githubusercontent\.com/, r => r.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC', 'base64') }));
 await page.route('**/api/config', r => r.fulfill({ json: { supabaseUrl: SB, supabaseAnonKey: 'anon' } }));
 let coachCalls = 0;
 await page.route('**/api/coach', async r => {
@@ -208,6 +209,37 @@ await page.route('**/api/voice-token', r => r.fulfill({ status: 500, json: { cod
 await page.click('[data-a=vcStart]'); await page.waitForTimeout(1500);
 ok(/set up on the server/i.test(await page.locator('.vc-err').innerText()), 'server not configured -> clear message');
 await page.screenshot({ path: 'test/voice-error.png' });
+
+
+log('4b. Exercise pictures and progress');
+await page.evaluate(() => {
+  const S = window.SF.S, p = n => String(n).padStart(2, '0');
+  const key = off => { const d = new Date(); d.setDate(d.getDate() - off); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+  const put = (off, f) => { const k = key(off), m = k.slice(0, 7); const M = S.months[m] || (S.months[m] = { days: {}, tx: [] }); M.days = M.days || {}; const d = M.days[k] || (M.days[k] = {}); f(d); };
+  put(30, d => { d.workouts = [{ id: 'w30', title: 'Push', ex: [{ name: 'Bench press', sets: 3, reps: 8, w: 165 }] }]; d.meas = { shoulders: 50, armL: 15, armR: 15.5 }; });
+  put(7, d => { d.workouts = [{ id: 'w7', title: 'Push', ex: [{ name: 'Bench', sets: 3, reps: 8, w: 175 }, { name: 'Rear delt fly', sets: 3, reps: 12, w: 100 }] }]; });
+  put(0, d => { d.workouts = [{ id: 'w0', title: 'Push', ex: [{ name: 'Barbell bench press', sets: 3, reps: 8, w: 185 }, { name: 'Rear delts on the chest fly machine', sets: 3, reps: 12, w: 110 }] }]; d.meas = { shoulders: 50.75, armL: 15.5, armR: 15.5 }; });
+  const B = window.SF.brain(); B.photos.push({ id: 'pA', type: 'progress', pose: 'front', date: key(28), sc: { shoulders: 6, chest: 6, arm_left: 6, arm_right: 7, legs: 6 } }, { id: 'pB', type: 'progress', pose: 'front', date: key(1), sc: { shoulders: 7, chest: 6, arm_left: 7, arm_right: 7, legs: 6 } });
+});
+await page.evaluate(() => { location.hash = 'workouts'; }); await page.waitForTimeout(1200);
+const wx = await page.locator('.wx').count(), wxImg = await page.locator('.wx .wx-img img').count();
+ok(wx >= 2 && wxImg >= 2, 'logged exercises show a picture of the movement (' + wxImg + ' of ' + wx + ')');
+const firstWx = await page.locator('.wx').first().innerText();
+ok(/\+10 lb/.test(firstWx) && /vs last week/.test(firstWx), 'bench shows +10 lb vs last week, even with different names logged');
+const rdSrc = await page.locator('.wx').nth(1).locator('img').getAttribute('src');
+ok(/Reverse_Machine_Flyes/.test(rdSrc || ''), '"rear delts on the chest fly machine" shows the rear delt machine fly');
+await page.locator('.wx').first().click(); await page.waitForTimeout(500);
+const exSheet = await page.locator('.sheet').innerText().catch(() => '');
+ok(/3 sets × 8 reps @ 185 lb/.test(exSheet) && /Past week/.test(exSheet) && /175×8 → 185×8/.test(exSheet) && /Past month/.test(exSheet) && /165×8 → 185×8/.test(exSheet), 'exercise sheet shows what you did and week and month progress');
+ok(await page.locator('.ex-hero img').count() === 2, 'exercise sheet shows start and end position photos');
+await page.screenshot({ path: 'test/exercise.png' });
+await page.keyboard.press('Escape'); await page.evaluate(() => { location.hash = 'progress'; }); await page.waitForTimeout(800);
+await page.locator('[data-a=growPick][data-v="60"]').click(); await page.waitForTimeout(400);
+const grow = await page.locator('.grow').innerText().catch(() => '');
+ok(/Shoulders/.test(grow) && /\+0\.75"/.test(grow) && /Left arm/.test(grow) && /\+0\.5"/.test(grow) && /Right arm/.test(grow), 'where-you-grew shows tape changes per area (shoulders +0.75", left arm +0.5")');
+ok(await page.locator('.bodymap').count() === 1, 'body map is drawn');
+await page.locator('.grow').scrollIntoViewIfNeeded(); await page.screenshot({ path: 'test/growth.png' });
+const sw2 = await page.evaluate(() => document.documentElement.scrollWidth); ok(sw2 <= 390, 'progress page fits 390px (' + sw2 + ')');
 
 log('5. Mobile layout');
 for (const r of ['home', 'talk', 'coach', 'prefs']) { await page.evaluate(r => { location.hash = r; }, r); await page.waitForTimeout(400); const sw = await page.evaluate(() => document.documentElement.scrollWidth); ok(sw <= 390, r + ' fits 390px (' + sw + ')'); }
