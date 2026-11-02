@@ -1,7 +1,7 @@
 // Explicit bridge from the app's globals to the voice module (keeps the module decoupled).
 window.SF = {
   get S() { return S; }, UI, V, A, I, AGENTS, COACH_RULES,
-  AG, esc, render, go, toast, chatLog, saveChat, touch,
+  AG, esc, render, go, toast, chatLog, saveChat, touch, pname, TEAM,
   coachTools: (m) => [...coachTools(m), ...((window.SteadfastRuntime && window.SteadfastRuntime.extraTools) ? window.SteadfastRuntime.extraTools() : [])], coachContext, agentPrompt, teamNotes, teamSwitch,
   agentAvatar, actsHtml, mdLite, brain, logEvent, touchQuiet, getSample,
   async verifySaved() {

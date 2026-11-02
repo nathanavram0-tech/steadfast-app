@@ -61,7 +61,7 @@ await page.routeWebSocket(/generativelanguage\.googleapis\.com/, ws => {
   const send = o => ws.send(JSON.stringify(o));
   ws.onMessage(raw => {
     const m = JSON.parse(String(raw));
-    if (m.setup) { live.setup = m.setup; send({ setupComplete: {} }); return; }
+    if (m.setup) { live.setup = m.setup; (live.setups = live.setups || []).push(m.setup); send({ setupComplete: {} }); return; }
     if (m.clientContent) { live.clientContent++; send({ serverContent: { outputTranscription: { text: 'Hey Nathan, what\'s going on?' } } }); send({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data: Buffer.alloc(24000 * 2 * 0.6).toString('base64') } }] } } }); send({ serverContent: { turnComplete: true } }); return; }
     if (m.realtimeInput && m.realtimeInput.audio) { live.audioFrames++; return; }
     if (m.toolResponse) { live.toolResponses.push(m.toolResponse); send({ serverContent: { outputTranscription: { text: 'Done, logged two hundred grams of chicken.' } } }); send({ serverContent: { turnComplete: true } }); return; }
@@ -100,6 +100,7 @@ await page.waitForTimeout(2500);
 ok(live.setup && /gemini-3\.8-live/.test(live.setup.model), 'connected to Live with the token-locked model');
 ok(/BidiGenerateContentConstrained\?access_token=auth_tokens\/test123/.test(live.url), 'used the short-lived token (not an API key)');
 ok(live.setup && JSON.stringify(live.setup.systemInstruction).includes('LIVE VOICE CALL'), 'voice rules sent');
+ok(live.setup && JSON.stringify(live.setup.generationConfig || live.setup).includes('Charon') && JSON.stringify(live.setup.systemInstruction).includes('Marcus'), 'head coach Marcus uses his own voice (Charon)');
 ok(live.setup && JSON.stringify(live.setup.systemInstruction).includes('Profile'), 'Steadfast brief (brain) sent');
 const fnNames = live.setup ? live.setup.tools[0].functionDeclarations.map(f => f.name) : [];
 ok(fnNames.includes('lookup') && fnNames.includes('log_food') && fnNames.includes('confirm_pending') && fnNames.includes('web_search'), 'same app tools + confirm_pending declared (' + fnNames.length + ')');
@@ -148,6 +149,16 @@ await page.waitForTimeout(1500);
 const out3 = live.toolResponses[2] && live.toolResponses[2].functionResponses[0].response.output; log('   confirm result:', JSON.stringify(out3).slice(0, 200));
 ok(out3 && out3.ok && out3.applied.includes('done'), 'spoken "yes" applies the change');
 
+// hand the call to the trainer: new voice, new name, same call
+const nSetups = live.setups.length;
+live.ws.send(JSON.stringify({ toolCall: { functionCalls: [{ id: 'fc4', name: 'switch_coach', args: { coach: 'trainer', reason: 'log his leg workout' } }] } }));
+await page.waitForTimeout(2500);
+const s2 = live.setups[live.setups.length - 1];
+ok(live.setups.length === nSetups + 1 && JSON.stringify(s2).includes('Fenrir'), 'handoff reconnects with the trainer\'s own voice (Fenrir)');
+ok(JSON.stringify(s2.systemInstruction).includes('YOU ARE Rex') && JSON.stringify(s2.systemInstruction).includes('THIS CALL SO FAR'), 'trainer Rex gets his role plus the call so far');
+ok(/Rex/.test(await page.locator('.coach-name').first().innerText()), 'screen shows Rex after the handoff');
+ok(['listening', 'speaking', 'thinking'].includes(await page.evaluate(() => window.SteadfastVoice.state())), 'call stays live through the handoff');
+
 // end call
 await page.click('[data-a=vcEnd]'); await page.waitForTimeout(1500);
 ok(/ended/i.test(await page.locator('.vc-state').innerText()), 'call ends cleanly');
@@ -156,6 +167,13 @@ ok(micLive === 'ended', 'voice state ended');
 const chat = store.get('chat'); const vlines = chat ? chat.body.data.log.filter(m => m.voice).length : 0;
 ok(vlines >= 3, 'voice transcript saved into the Coach chat (' + vlines + ' lines)');
 const brain = store.get('brain'); ok(brain && (brain.body.data.calls || []).some(c => c.voice === 'live' && c.summary), 'call summary saved to the brain');
+
+await page.click('[data-a=vcTeam]'); await page.waitForTimeout(300);
+await page.fill('[data-vc-name=trainer]', 'Mike'); await page.dispatchEvent('[data-vc-name=trainer]', 'change');
+await page.selectOption('[data-vc-voice=trainer]', 'Orus'); await page.waitForTimeout(1200);
+const coreT = store.get('core'); ok(coreT && JSON.stringify(coreT.body).includes('"Mike"') && JSON.stringify(coreT.body).includes('"Orus"'), 'team editor saves a new name and voice');
+await page.screenshot({ path: 'test/team.png', fullPage: true });
+await page.click('[data-a=vcTeam]');
 
 log('4. Errors are shown, never an endless spinner');
 await page.unroute('**/api/voice-token');

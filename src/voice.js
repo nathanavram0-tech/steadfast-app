@@ -6,7 +6,15 @@ import { GoogleGenAI, Modality } from '@google/genai';
 
 const SF = window.SF;
 const RT = window.SteadfastRuntime;
-const VOICE_NAME = 'Puck';
+// Each coach has its own Gemini voice. Nathan can change names and voices on the Talk screen (Your team).
+const VOICES = [
+  ['Charon', 'Man, deep and steady'], ['Fenrir', 'Man, energetic'], ['Orus', 'Man, firm and calm'], ['Puck', 'Man, upbeat'],
+  ['Kore', 'Woman, firm'], ['Aoede', 'Woman, bright and easy'], ['Leda', 'Woman, youthful'], ['Zephyr', 'Woman, light and clear'],
+];
+const DEFAULT_VOICE = { main: 'Charon', fuel: 'Puck', trainer: 'Fenrir', faith: 'Orus', money: 'Kore', glow: 'Aoede', mind: 'Leda' };
+function teamCfg() { const c = SF.S.core; c.coach = c.coach || {}; c.coach.team = c.coach.team || {}; return c.coach.team; }
+function voiceFor(k) { const t = teamCfg()[k]; const v = t && t.voice; return VOICES.some(x => x[0] === v) ? v : (DEFAULT_VOICE[k] || 'Puck'); }
+const TEAM_KEYS = () => ['main', ...SF.TEAM];
 const CONNECT_TIMEOUT_MS = 15000;
 
 /* ---------- mic capture worklet: downsample to 16 kHz Int16, ~40 ms frames ---------- */
@@ -29,12 +37,13 @@ const C = {
   err: '', errCode: '', muted: false, showText: false,
   session: null, ctx: null, stream: null, node: null, src: null, outGain: null, outAn: null, inLevel: 0,
   playing: new Set(), nextT: 0, userLine: '', coachLine: '', msg: null, lines: [], agent: 'main',
-  wake: null, timer: 0, raf: 0, startedAt: 0, closing: false, resumeHandle: null, retried: false,
+  gen: 0, handoff: null, handoffNote: null, teamOpen: false, wake: null, timer: 0, raf: 0, startedAt: 0, closing: false, resumeHandle: null, retried: false,
 };
 
 const VOICE_RULES = `
 LIVE VOICE CALL: you are on a live, hands-free voice call with Nathan. Talk like a real coach on the phone: relaxed, direct, warm. Usually 1-3 short sentences, then let him talk. Ask one sharp question when you need more info before advising. Never read lists out loud; give the top one or two things and offer more. Say numbers naturally ("about two hundred grams"). No markdown or symbols. If he interrupts, drop your point and answer the new thing. Remember everything said earlier in this call.
 DATA: before answering about his numbers, call lookup. Say whether something is logged, an estimate, or not logged. Never invent data.
+TEAM: you are one of Nathan's coaches, each with their own name and voice, all sharing the same data, memory and tools. Use your own name. If he asks for another coach, or the topic is clearly their lane and he agrees, call switch_coach.
 RESEARCH: for facts you are not sure of (food values, studies, products, prices, rules, news), say "let me look that up", call web_search, then give the exact answer first and briefly say where it came from. Never guess. If he asks you to learn or remember a finding, call save_research with the sources.
 ACTIONS: you can change Steadfast with your tools while you talk. Only say something is saved after the tool result says it was saved. When a tool says a change needs his confirmation, tell him briefly what will change and ask "want me to do it?" When he clearly says yes, call confirm_pending with decision "confirm"; if no, "cancel".`;
 
@@ -57,7 +66,7 @@ function finishCoachTurn() {
   if (C.userLine.trim()) { pushUser(C.userLine); C.userLine = ''; }
   const t = C.coachLine.trim();
   if (t || (C.msg && ((C.msg.acts || []).length || (C.msg.confirms || []).length))) {
-    const m = curMsg(); m.text = t || m.text || '…'; C.lines.push({ who: 'coach', text: m.text });
+    const m = curMsg(); m.text = t || m.text || '…'; C.lines.push({ who: 'coach', name: SF.pname(C.agent), text: m.text });
   }
   C.coachLine = ''; C.msg = null;
   SF.saveChat(); paint();
@@ -80,6 +89,8 @@ function stopPlayback() { for (const s of C.playing) { try { s.stop(); } catch (
 function toolDecls() {
   const tools = SF.coachTools({ acts: [], confirms: [] });
   const decl = tools.map(t => ({ name: t.name, description: t.description, parametersJsonSchema: t.inputSchema || { type: 'object', properties: {} } }));
+  const others = TEAM_KEYS().filter(k => k !== C.agent);
+  decl.push({ name: 'switch_coach', description: 'Hand the call to a teammate, who picks up in their own voice with everything said so far. Use when Nathan asks for a coach by name or role, or when the topic is clearly their lane and he agrees. Teammates: ' + others.map(k => `${k} = ${SF.pname(k)} the ${SF.AG(k).name} (${SF.AG(k).role})`).join('; '), parametersJsonSchema: { type: 'object', properties: { coach: { type: 'string', enum: others }, reason: { type: 'string', description: 'One line on what Nathan needs from them.' } }, required: ['coach'] } });
   decl.push({ name: 'confirm_pending', description: 'Apply or cancel the change(s) waiting for Nathan\'s confirmation from this call. Only after he clearly says yes or no.', parametersJsonSchema: { type: 'object', properties: { decision: { type: 'string', enum: ['confirm', 'cancel'] } }, required: ['decision'] } });
   return [{ functionDeclarations: decl }];
 }
@@ -89,6 +100,11 @@ function pendingConfirms() {
 }
 async function runTool(fc) {
   const name = fc.name, args = fc.args || {};
+  if (name === 'switch_coach') {
+    const k = String(args.coach || ''); if (!TEAM_KEYS().includes(k) || k === C.agent) return { error: 'Unknown coach.' };
+    C.handoff = { to: k, from: C.agent, reason: String(args.reason || '').slice(0, 200) };
+    return { ok: true, note: `Say one short line handing over to ${SF.pname(k)}, then stop talking.` };
+  }
   if (name === 'confirm_pending') {
     const P = pendingConfirms(); if (!P.length) return { ok: false, note: 'Nothing is waiting for confirmation.' };
     for (const { m, i } of P) (args.decision === 'confirm' ? SF.A.confirmAct : SF.A.cancelAct)({ dataset: { ts: String(m.ts), i: String(i) } });
@@ -124,15 +140,17 @@ async function getToken() {
 }
 
 function systemText() {
-  const recent = SF.chatLog('main').filter(m => m.text && !m.err).slice(-10).map(m => (m.role === 'me' ? 'Nathan: ' : 'Coach: ') + String(m.text).slice(0, 300)).join('\n');
+  const recent = SF.chatLog(C.agent || 'main').filter(m => m.text && !m.err).slice(-10).map(m => (m.role === 'me' ? 'Nathan: ' : 'Coach: ') + String(m.text).slice(0, 300)).join('\n');
   const calls = (SF.brain().calls || []).filter(c => c.summary).slice(-3).map(c => `${new Date(c.at).toLocaleDateString()}: ${c.summary}`).join('\n');
   return SF.agentPrompt() + SF.COACH_RULES + VOICE_RULES + '\n\n' + SF.coachContext() + SF.teamNotes()
-    + (recent ? '\n\nRECENT CHAT (for continuity):\n' + recent : '') + (calls ? '\n\nEARLIER CALLS:\n' + calls : '');
+    + (recent ? '\n\nRECENT CHAT (for continuity):\n' + recent : '') + (calls ? '\n\nEARLIER CALLS:\n' + calls : '')
+    + (C.handoffNote && C.lines.length ? `\n\nTHIS CALL SO FAR (you just took over from ${SF.pname(C.handoffNote.from)}):\n` + C.lines.slice(-16).map(l => (l.who === 'you' ? 'Nathan: ' : (l.name || 'Coach') + ': ') + l.text).join('\n') : '');
 }
 
 async function connect(resumeHandle) {
   const { token, model } = await getToken();
   const ai = new GoogleGenAI({ apiKey: token, httpOptions: { apiVersion: 'v1alpha' } });
+  const g = ++C.gen;  // callbacks from an older session are ignored
   return await ai.live.connect({
     model,
     config: {
@@ -141,15 +159,15 @@ async function connect(resumeHandle) {
       tools: toolDecls(),
       inputAudioTranscription: {},
       outputAudioTranscription: {},
-      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: VOICE_NAME } } },
+      speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceFor(C.agent) } } },
       contextWindowCompression: { slidingWindow: {} },
       sessionResumption: resumeHandle ? { handle: resumeHandle } : {},
     },
     callbacks: {
       onopen: () => {},
-      onmessage: onMessage,
+      onmessage: (m) => { if (g === C.gen) onMessage(m); },
       onerror: (e) => { console.warn('live error', e); },
-      onclose: (e) => onClose(e),
+      onclose: (e) => { if (g === C.gen) onClose(e); },
     },
   });
 }
@@ -172,7 +190,23 @@ async function onMessage(m) {
     C.coachLine += sc.outputTranscription.text; paint();
   }
   if (sc.modelTurn && sc.modelTurn.parts) for (const p of sc.modelTurn.parts) if (p.inlineData && p.inlineData.data) playPcm(p.inlineData.data);
-  if (sc.turnComplete) finishCoachTurn();
+  if (sc.turnComplete) { finishCoachTurn(); if (C.handoff) doHandoff(); }
+}
+
+async function doHandoff() {
+  const h = C.handoff; C.handoff = null; if (!h) return;
+  // Let the handover line finish playing, then reconnect as the new coach with the new voice.
+  const wait = Math.max(0, (C.nextT - (C.ctx ? C.ctx.currentTime : 0)) * 1000);
+  await new Promise(r => setTimeout(r, Math.min(wait, 6000) + 150));
+  C.gen++; try { C.session && C.session.close(); } catch (e) {} C.session = null;
+  stopPlayback(); C.agent = h.to; SF.UI.agent = h.to; C.msg = null; C.resumeHandle = null;
+  C.handoffNote = { from: h.from, reason: h.reason };
+  SF.render(); setState('connecting');
+  try {
+    C.session = await withTimeout(connect(null), CONNECT_TIMEOUT_MS); setState('listening');
+    C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: `(${SF.pname(h.from)} just handed Nathan over to you on this live call${h.reason ? ': ' + h.reason : ''}. Introduce yourself by name in one short sentence and pick up right where they left off.)` }] }], turnComplete: true });
+    SF.logEvent('coach', `Call handed to ${SF.pname(h.to)}`, { src: 'Coach' });
+  } catch (e) { setState('error', (e && e.message) || 'Could not switch coaches.', (e && e.code) || 'handoff'); }
 }
 
 function onClose(e) {
@@ -184,7 +218,7 @@ function onClose(e) {
 
 async function reconnect(why) {
   C.retried = true; stopPlayback(); setState('connecting');
-  try { try { C.session && C.session.close(); } catch (e) {} C.session = await withTimeout(connect(C.resumeHandle), CONNECT_TIMEOUT_MS); C.retried = why === 'goaway' ? false : C.retried; setState('listening'); }
+  try { C.gen++; try { C.session && C.session.close(); } catch (e) {} C.session = await withTimeout(connect(C.resumeHandle), CONNECT_TIMEOUT_MS); C.retried = why === 'goaway' ? false : C.retried; setState('listening'); }
   catch (e) { setState('error', (e && e.message) || 'Could not reconnect.', (e && e.code) || 'reconnect'); }
 }
 
@@ -192,7 +226,7 @@ function withTimeout(p, ms) { return Promise.race([p, new Promise((_, rej) => se
 
 async function start() {
   if (C.state !== 'idle' && C.state !== 'ended' && C.state !== 'error') return;
-  C.agent = SF.UI.agent || 'main'; C.lines = []; C.userLine = ''; C.coachLine = ''; C.msg = null; C.err = ''; C.retried = false; C.resumeHandle = null; C.closing = false;
+  C.agent = SF.UI.agent || 'main'; C.lines = []; C.userLine = ''; C.coachLine = ''; C.msg = null; C.err = ''; C.retried = false; C.resumeHandle = null; C.closing = false; C.handoff = null; C.handoffNote = null;
   setState('connecting');
   try {
     // 1) Audio must be unlocked inside the tap on iPhone.
@@ -238,7 +272,7 @@ async function end() {
   if (C.coachLine || C.userLine) finishCoachTurn();
   try { C.session && C.session.close(); } catch (e) {}
   await cleanup();
-  setState('ended');
+  setState('ended'); SF.render();
   const mins = Math.max(1, Math.round((Date.now() - (C.startedAt || Date.now())) / 60000));
   const said = C.lines.map(l => (l.who === 'you' ? 'Nathan: ' : 'Coach: ') + l.text).join('\n');
   const rec = { id: 'v' + Date.now().toString(36), at: C.startedAt || Date.now(), mins, agent: C.agent, state: 'synced', voice: 'live' };
@@ -301,7 +335,7 @@ function loop() {
 
 /* ---------- screen ---------- */
 const LABEL = { idle: 'Ready', connecting: 'Connecting…', listening: 'Listening', thinking: 'Thinking…', speaking: 'Speaking', paused: 'Paused', error: 'Call problem', ended: 'Call ended' };
-function coachName() { const a = SF.AG(SF.UI.agent || 'main'); return a.name === 'COACH' ? 'Coach' : a.name[0] + a.name.slice(1).toLowerCase(); }
+function coachName() { return SF.pname(C.state !== 'idle' && C.state !== 'ended' ? C.agent : (SF.UI.agent || 'main')); }
 function confirmsHtml() {
   const P = pendingConfirms(); if (!P.length) return '';
   return '<div class="vc-confirms">' + P.map(({ m, i }) => `<div class="confirm pending"><span>${SF.esc(m.confirms[i].summary)}</span><div class="row" style="gap:8px"><button class="btn sm" data-a="confirmAct" data-ts="${m.ts}" data-i="${i}">Confirm</button><button class="btn sm ghost" data-a="cancelAct" data-ts="${m.ts}" data-i="${i}">Cancel</button></div></div>`).join('') + '<p class="tiny muted" style="text-align:center;margin:0">Or just say "yes, do it".</p></div>';
@@ -310,7 +344,7 @@ function transcriptHtml() {
   const L = [...C.lines.slice(-12)];
   if (C.userLine.trim()) L.push({ who: 'you', text: C.userLine + '…' });
   if (C.coachLine.trim()) L.push({ who: 'coach', text: C.coachLine + '…' });
-  return L.map(l => `<p class="vc-l ${l.who}"><b>${l.who === 'you' ? 'You' : coachName()}</b> ${SF.esc(l.text)}</p>`).join('') || '<p class="tiny muted">The transcript shows up here as you talk.</p>';
+  return L.map(l => `<p class="vc-l ${l.who}"><b>${l.who === 'you' ? 'You' : SF.esc(l.name || coachName())}</b> ${SF.esc(l.text)}</p>`).join('') || '<p class="tiny muted">The transcript shows up here as you talk.</p>';
 }
 function stateBody() {
   const s = C.state, live = ['listening', 'thinking', 'speaking', 'connecting'].includes(s);
@@ -326,8 +360,9 @@ function view() {
   const a = SF.AG(SF.UI.agent || 'main');
   const { live, caption, main } = stateBody();
   return `<div class="vc" style="--ac:${a.ac}">
-    <div class="call-top"><a class="icon-btn" href="#home" aria-label="Back to home">${SF.I.back}</a><span class="coach-name" style="color:${a.ac}"><i class="live-dot ${live ? '' : 'off'}"></i>${a.name}${live ? ' · LIVE' : ''}</span><button class="icon-btn ${C.showText ? 'on' : ''}" data-a="vcText" aria-pressed="${C.showText}" aria-label="Show transcript">${SF.I.journal || SF.I.send}</button></div>
+    <div class="call-top"><a class="icon-btn" href="#home" aria-label="Back to home">${SF.I.back}</a><span class="coach-name" style="color:${a.ac}"><i class="live-dot ${live ? '' : 'off'}"></i>${SF.esc(coachName())} · ${a.name}${live ? ' · LIVE' : ''}</span><button class="icon-btn ${C.showText ? 'on' : ''}" data-a="vcText" aria-pressed="${C.showText}" aria-label="Show transcript">${SF.I.journal || SF.I.send}</button></div>
     ${live ? '' : SF.teamSwitch()}
+    ${live ? '' : teamPanel()}
     <div id="vc-body">${bodyHtml(caption, main)}</div>
   </div>`;
 }
@@ -351,6 +386,24 @@ function paint() {
   if (!C.raf && C.ctx) loop();
 }
 
+/* ---------- your team: names and voices ---------- */
+function teamPanel() {
+  if (!C.teamOpen) return `<button class="link vc-team-btn" data-a="vcTeam">Your team: names and voices</button>`;
+  const T = teamCfg();
+  return `<section class="card vc-team"><div class="row between"><h2>YOUR TEAM</h2><button class="link" data-a="vcTeam">Done</button></div>
+    <p class="tiny muted">Rename any coach and pick their voice. Everyone shares the same memory and data, and on a call you can say "put Rex on" to switch.</p>
+    ${TEAM_KEYS().map(k => { const a = SF.AG(k); const v = voiceFor(k); return `<div class="vc-tm" style="--ac:${a.ac}">${SF.agentAvatar(k, 40)}
+      <label class="field"><span>${a.name} · ${SF.esc(a.role)}</span><input class="in" data-vc-name="${k}" maxlength="24" value="${SF.esc((T[k] && T[k].name) || SF.pname(k))}"></label>
+      <label class="field"><span>VOICE</span><select class="in" data-vc-voice="${k}">${VOICES.map(([n, d]) => `<option value="${n}" ${n === v ? 'selected' : ''}>${d} (${n})</option>`).join('')}</select></label></div>`; }).join('')}
+  </section>`;
+}
+document.addEventListener('change', (e) => {
+  const el = e.target; const k = el && (el.dataset.vcName || el.dataset.vcVoice); if (!k) return;
+  const T = teamCfg(); T[k] = T[k] || {};
+  if (el.dataset.vcName) T[k].name = String(el.value || '').trim().slice(0, 24); else T[k].voice = el.value;
+  SF.touch('core'); SF.toast(el.dataset.vcName ? 'Name saved' : 'Voice saved');
+});
+
 /* ---------- plug into the app ---------- */
 SF.V.talk = view;
 Object.assign(SF.A, {
@@ -359,12 +412,17 @@ Object.assign(SF.A, {
   vcMute: () => toggleMute(),
   vcResume: () => resume(),
   vcText: () => { C.showText = !C.showText; SF.render(); },
+  vcTeam: () => { C.teamOpen = !C.teamOpen; SF.render(); },
 });
 // While a call is live, a re-render (for example after Confirm) must not drop the call screen.
 const css = document.createElement('style');
 css.textContent = `
 .vc{display:flex;flex-direction:column;gap:14px;min-height:calc(100dvh - 150px);padding-bottom:12px}
 .vc-stage{display:grid;place-items:center;padding:8px 0}
+.vc-team-btn{align-self:center;color:#8DBBFF;min-height:44px}
+.vc-team{display:grid;gap:12px}.vc-team h2{margin:0}
+.vc-tm{display:grid;grid-template-columns:40px 1fr 1fr;gap:10px;align-items:end}
+@media (max-width:420px){.vc-tm{grid-template-columns:40px 1fr}.vc-tm label:last-child{grid-column:2}}
 .vc-orb{--lvl:0;position:relative;width:min(64vw,260px);aspect-ratio:1;display:grid;place-items:center}
 .vc-orb i{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,rgba(0,212,255,.30),rgba(67,139,250,.10) 55%,transparent 70%);transform:scale(calc(.82 + var(--lvl)*.45));transition:transform .08s linear}
 .vc-orb i:nth-child(2){inset:12%;border:1px solid rgba(0,212,255,.35);background:none;transform:scale(calc(.9 + var(--lvl)*.3))}

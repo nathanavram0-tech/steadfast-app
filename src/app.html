@@ -1989,6 +1989,10 @@ const AGENTS={
 };
 const TEAM=['fuel','trainer','glow','faith','money','mind'];
 const AG=k=>AGENTS[k||UI.agent]||AGENTS.main;
+// Each coach's own name (Nathan can rename them; voice picks live in the standalone app).
+const PERSON={main:'Marcus',fuel:'Jay',trainer:'Rex',faith:'Elijah',money:'Victoria',glow:'Mia',mind:'Nia'};
+function pname(k){k=k||UI.agent||'main';const t=(((S.core||{}).coach||{}).team||{})[k];return (t&&String(t.name||'').trim())||PERSON[k]||AG(k).name}
+function pnameA(a){return pname(Object.keys(AGENTS).find(x=>AGENTS[x]===a)||'main')}
 const SVG_CACHE={};
 function coachSvg(k){
   if(SVG_CACHE[k])return SVG_CACHE[k];const a=AGENTS[k]||AGENTS.main;let s=COACH_SVG;
@@ -2022,12 +2026,12 @@ function agentLine(k){
 function agentCard(k){
   const a=AG(k);
   return `<section class="card agent-card" style="--ac:${a.ac}"><div class="row" style="gap:12px;align-items:center">${agentAvatar(k,58)}
-  <div class="stack" style="flex:1;min-width:0;gap:4px"><span class="coach-name"><i class="live-dot"></i>${a.name}<small>${esc(a.role)}</small></span><div class="tiny" style="color:var(--text);line-height:1.4">${esc(agentLine(k))}</div></div></div>
+  <div class="stack" style="flex:1;min-width:0;gap:4px"><span class="coach-name"><i class="live-dot"></i>${esc(pnameA(a))}<small>${a.name} · ${esc(a.role)}</small></span><div class="tiny" style="color:var(--text);line-height:1.4">${esc(agentLine(k))}</div></div></div>
   <div class="btn-row"><a class="btn sm ag-btn" href="#talk/${k}">${I.mic} Talk</a><a class="btn sm ghost" href="#coach/${k}">${I.send} Chat</a></div></section>`;
 }
 function teamRow(){
   return `<section class="team"><div class="card-head" style="padding:0 2px"><div class="t"><h2>YOUR COACHES</h2></div><span class="tiny muted">all share your data</span></div>
-  <div class="team-row">${TEAM.map(k=>{const a=AG(k);return `<a class="team-it" href="#coach/${k}" style="--ac:${a.ac}">${agentAvatar(k,54)}<b>${a.name}</b><span>${esc(a.role.split(' & ')[0].split(' · ')[0])}</span></a>`}).join('')}</div></section>`;
+  <div class="team-row">${TEAM.map(k=>{const a=AG(k);return `<a class="team-it" href="#coach/${k}" style="--ac:${a.ac}">${agentAvatar(k,54)}<b>${esc(pname(k))}</b><span>${esc(a.role.split(' & ')[0].split(' · ')[0])}</span></a>`}).join('')}</div></section>`;
 }
 function teamSwitch(){
   return `<div class="team-switch">${['main',...TEAM].map(k=>`<a href="#${UI.route==='talk'?'talk':'coach'}${k==='main'?'':'/'+k}" class="${UI.agent===k?'on':''}" style="--ac:${AG(k).ac}" aria-label="${AG(k).name}">${agentAvatar(k,34,'mini')}</a>`).join('')}</div>`;
@@ -2039,9 +2043,9 @@ function teamNotes(){
   return out.length?'\n\nRECENT FROM THE OTHER COACHES (shared so the team stays connected; don\'t repeat it back unless it matters):\n'+out.join('\n\n'):'';
 }
 function agentPrompt(){
-  const a=AG(),others=['main',...TEAM].filter(k=>k!==UI.agent).map(k=>`${AG(k).name} (${AG(k).role.toLowerCase()})`).join(', ');
-  if(UI.agent==='main')return `ON THIS CHAT YOU ARE COACH, the head coach. Nathan also has specialist coaches in the app: ${others}. They share your data and memory. Handle anything yourself; when something deserves a deeper session, you can mention the specialist by name.\n\n`;
-  return `ON THIS CHAT YOU ARE ${a.name}, Nathan's ${a.role.toLowerCase()} coach inside Steadfast, with your own personality. You are one of a team: ${others}. Everyone shares the same app data, memory and tools.\nYOUR LANE: ${a.lane}\nGo deep on your lane. If he asks about something outside it, still help briefly (and log it with the tools if he did it), then say which coach to take it to for more. Call yourself ${a.name}, never Coach.\n\n`;
+  const a=AG(),others=['main',...TEAM].filter(k=>k!==UI.agent).map(k=>`${pname(k)} the ${AG(k).name} (${AG(k).role.toLowerCase()})`).join(', ');
+  if(UI.agent==='main')return `ON THIS CHAT YOU ARE ${pname('main')}, the head coach (COACH). Your name is ${pname('main')}; use it when you introduce yourself. Nathan also has specialist coaches in the app: ${others}. They share your data and memory. Handle anything yourself; when something deserves a deeper session, you can mention the specialist by name.\n\n`;
+  return `ON THIS CHAT YOU ARE ${pname()}, the ${a.name}: Nathan's ${a.role.toLowerCase()} coach inside Steadfast, with your own personality. You are one of a team: ${others}. Everyone shares the same app data, memory and tools.\nYOUR LANE: ${a.lane}\nGo deep on your lane. If he asks about something outside it, still help briefly (and log it with the tools if he did it), then say which coach to take it to for more. Call yourself ${a.name}, never Coach.\n\n`;
 }
 let talkT=0;
 function setTalking(on){document.querySelectorAll('.coach.speaker').forEach(c=>c.classList.toggle('talking',!!on));syncVideos(on)}
@@ -2579,7 +2583,7 @@ const CHIPS=[['I just ate…','I just ate '],['What should I eat right now?','Wh
 let PENDING_FILES=[];
 V.coach=()=>{
   getSample();const k=UI.agent||'main',a=AG(k);
-  return `<div class="coach-top" style="--ac:${a.ac}"><a class="icon-btn" href="#home" aria-label="Back to home">${I.back}</a><div class="coach-stage">${agentAvatar(k,(window.innerHeight||800)<760?76:112,'big speaker')}</div><div class="coach-id"><b class="display" style="color:${a.ac}">${a.name}</b><span class="tiny muted"><i class="live-dot"></i> ${esc(a.role)}</span></div>
+  return `<div class="coach-top" style="--ac:${a.ac}"><a class="icon-btn" href="#home" aria-label="Back to home">${I.back}</a><div class="coach-stage">${agentAvatar(k,(window.innerHeight||800)<760?76:112,'big speaker')}</div><div class="coach-id"><b class="display" style="color:${a.ac}">${esc(pnameA(a))}</b><span class="tiny muted"><i class="live-dot"></i> ${esc(a.role)}</span></div>
   <button class="icon-btn ${S.core.coach.voice?'on':''}" data-a="voiceTog" aria-pressed="${!!S.core.coach.voice}" aria-label="Read replies out loud">${I.sound}</button></div>
   ${teamSwitch()}
   <a class="talk-cta" href="#talk${k==='main'?'':'/'+k}" ${k==='main'?'':`style="--ac:${a.ac};color:#06101C"`}>${I.mic} Voice call with ${a.name==='COACH'?'Coach':a.name[0]+a.name.slice(1).toLowerCase()}</a>
@@ -3055,7 +3059,7 @@ V.talk=()=>{
   const a=AG(),nm=a.name==='COACH'?'Coach':a.name[0]+a.name.slice(1).toLowerCase();
   const v=pickVoice();
   return `<div class="call">
-  <div class="call-top"><a class="icon-btn" href="#home" aria-label="Back to home">${I.back}</a><span class="coach-name" style="color:${a.ac}"><i class="live-dot"></i>${a.name} · LIVE</span><a class="icon-btn" href="#coach${UI.agent==='main'?'':'/'+UI.agent}" aria-label="Transcript and chat history">${I.journal||I.send}</a></div>
+  <div class="call-top"><a class="icon-btn" href="#home" aria-label="Back to home">${I.back}</a><span class="coach-name" style="color:${a.ac}"><i class="live-dot"></i>${esc(pnameA(a))} · LIVE</span><a class="icon-btn" href="#coach${UI.agent==='main'?'':'/'+UI.agent}" aria-label="Transcript and chat history">${I.journal||I.send}</a></div>
   ${teamSwitch()}
   <div class="call-stage orb">${agentAvatar(UI.agent,w,'call-av speaker')}</div>
   <div class="call-hero"><h1 class="display">Talk to ${esc(nm)}</h1><p>${esc(nm)} answers out loud and knows your Steadfast data. ${SR_OFF?(IS_TOUCH?'Tap the box, then the mic on your keyboard, and talk.':IS_MAC?'Click the box, press Fn twice, and talk.':'Click the box, press Win + H, and talk.'):'Tap the mic and talk.'}</p></div>
