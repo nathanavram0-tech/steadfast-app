@@ -22,7 +22,10 @@ const top = (q, agent) => (K.searchLibrary(L, ms, q, { departments: K.AGENT_DEPT
 const cases = [['How can I build more upper chest?', 'trainer', 'phys-upper-chest'], ['how much protein do I need', 'fuel', 'nut-protein-intake'], ['What does the Bible say about discipline?', 'faith', 'faith-discipline-scripture'],
   ['I keep procrastinating on editing', 'mind', 'disc-procrastination'], ['taxes on my videography side income', 'money', 'wealth-self-employment-tax'], ['is IGF-1 LR3 safe', 'trainer', 'health-igf1-peptides'],
   ['who was Greg Plitt and what was his mindset', 'main', 'expert-greg-plitt'], ['should I pay off the smallest debt first', 'money', 'wealth-debt-payoff'], ['how long until a habit sticks', 'mind', 'disc-habit-formation'],
-  ['does sunscreen keep skin young', 'glow', 'app-sunscreen-skin-aging'], ['how many sets per week to grow', 'trainer', 'phys-weekly-volume'], ['make a better offer to get clients', 'money', 'expert-alex-hormozi']];
+  ['does sunscreen keep skin young', 'glow', 'app-sunscreen-skin-aging'], ['how many sets per week to grow', 'trainer', 'phys-weekly-volume'], ['make a better offer to get clients', 'money', 'expert-alex-hormozi'],
+  ['how do I grow wider shoulders', 'trainer', 'phys-side-delts'], ['my left arm is smaller than my right', 'trainer', 'phys-unilateral-imbalances'], ['should I open a roth ira', 'money', 'wealth-roth-ira'],
+  ['are index funds better than picking stocks', 'money', 'wealth-index-funds'], ['what should I charge for a wedding film', 'money', 'biz-wedding-video-pricing'], ['how fast should I reply to inquiries', 'money', 'biz-lead-response-speed'],
+  ['I feel anxious, what does the Bible say', 'faith', 'faith-anxiety-prayer'], ['I keep getting distracted while editing and can\'t focus', 'mind', 'disc-focus-attention-residue']];
 for (const [q, a, want] of cases) { const got = top(q, a); ok(got === want, `"${q}" (${a}) -> ${want}`, got); }
 const faithOnly = K.searchLibrary(L, ms, 'protein', { departments: K.AGENT_DEPTS.faith, limit: 5 });
 ok(faithOnly.every(h => K.AGENT_DEPTS.faith.includes(h.doc.department)), 'a coach only searches its own departments');

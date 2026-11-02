@@ -37,7 +37,7 @@ for (const file of files.sort()) {
     if (!s.title) bad('source without a title');
     if (!s.by) bad('source without author/organization: ' + s.title);
     if (!isDate(s.published)) bad('source without publication date: ' + s.title);
-    if (s.url) { const k = s.url.replace(/[#?].*$/, '').replace(/\/$/, ''); if (seenUrl.has(k) && seenUrl.get(k) !== fm.id) warnings.push(`${fm.id}: source also used by ${seenUrl.get(k)}: ${s.url}`); else seenUrl.set(k, fm.id); }
+    if (s.url) { const k = s.url.replace(/#.*$/, '').replace(/\/$/, ''); if (seenUrl.has(k) && seenUrl.get(k) !== fm.id) warnings.push(`${fm.id}: source also used by ${seenUrl.get(k)}: ${s.url}`); else seenUrl.set(k, fm.id); }
   }
   // Sections
   const parts = body.split(/^## /m).filter(Boolean);
