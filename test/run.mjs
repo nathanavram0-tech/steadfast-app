@@ -156,6 +156,16 @@ log('5. Mobile layout');
 for (const r of ['home', 'talk', 'coach', 'prefs']) { await page.evaluate(r => { location.hash = r; }, r); await page.waitForTimeout(400); const sw = await page.evaluate(() => document.documentElement.scrollWidth); ok(sw <= 390, r + ' fits 390px (' + sw + ')'); }
 await page.evaluate(() => { location.hash = 'talk'; }); await page.waitForTimeout(400); await page.screenshot({ path: 'test/voice-idle.png' });
 
+log('6. Move your data');
+await page.evaluate(() => { location.hash = 'prefs'; }); await page.waitForTimeout(400);
+const [dl] = await Promise.all([page.waitForEvent('download'), page.click('[data-a=exportAll]')]);
+const exp = JSON.parse(readFileSync(await dl.path(), 'utf8'));
+ok(exp.app === 'steadfast' && exp.S && exp.S.core, 'export file has all app data');
+exp.S.core.profile = Object.assign({}, exp.S.core.profile, { importMarker: 'from-claude' });
+await page.setInputFiles('#imp-file', { name: 'steadfast-export.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(exp)) });
+await page.waitForTimeout(400); await page.click('[data-a=importOk]'); await page.waitForTimeout(1500);
+const core = store.get('core'); ok(core && JSON.stringify(core.body).includes('from-claude'), 'imported data saved to the database');
+
 log('\nPage errors:', errs.filter(e => !/favicon|404/.test(e)).slice(0, 8));
 log(`\n${pass} passed, ${fail} failed`);
 await b.close(); srv.close();
