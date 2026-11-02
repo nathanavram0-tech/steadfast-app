@@ -35,6 +35,7 @@ const C = {
 const VOICE_RULES = `
 LIVE VOICE CALL: you are on a live, hands-free voice call with Nathan. Talk like a real coach on the phone: relaxed, direct, warm. Usually 1-3 short sentences, then let him talk. Ask one sharp question when you need more info before advising. Never read lists out loud; give the top one or two things and offer more. Say numbers naturally ("about two hundred grams"). No markdown or symbols. If he interrupts, drop your point and answer the new thing. Remember everything said earlier in this call.
 DATA: before answering about his numbers, call lookup. Say whether something is logged, an estimate, or not logged. Never invent data.
+RESEARCH: for facts you are not sure of (food values, studies, products, prices, rules, news), say "let me look that up", call web_search, then give the exact answer first and briefly say where it came from. Never guess. If he asks you to learn or remember a finding, call save_research with the sources.
 ACTIONS: you can change Steadfast with your tools while you talk. Only say something is saved after the tool result says it was saved. When a tool says a change needs his confirmation, tell him briefly what will change and ask "want me to do it?" When he clearly says yes, call confirm_pending with decision "confirm"; if no, "cancel".`;
 
 /* ---------- helpers ---------- */
@@ -102,10 +103,10 @@ async function runTool(fc) {
   let result;
   try { result = await t.execute(args); } catch (e) { return { error: String((e && e.message) || e) }; }
   const acts = (msg.acts || []).slice(before);
-  if (name !== 'lookup') {
+  if (!(RT && RT.READ_TOOLS ? RT.READ_TOOLS.has(name) : name === 'lookup')) {
     const v = await SF.verifySaved();
     result = { result, saved: v.saved, note: v.note, needsConfirmation: (msg.confirms || []).filter(c => c.state === 'pending').map(c => c.summary) };
-    if (acts.length) RT && RT.audit('voice', name, { args, acts, saved: v.saved });
+    if (acts.length || name === 'save_research') RT && RT.audit('voice', name, { args, acts, saved: v.saved });
   }
   SF.saveChat(); paint();
   return result;

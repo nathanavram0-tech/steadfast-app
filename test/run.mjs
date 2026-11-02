@@ -30,10 +30,16 @@ let coachCalls = 0;
 await page.route('**/api/coach', async r => {
   coachCalls++; const body = r.request().postDataJSON();
   const last = body.contents[body.contents.length - 1];
+  const fr = last.parts[0].functionResponse;
+  if (fr && fr.name === 'web_search') { const src = fr.response.result.sources; const call = { name: 'save_research', args: { topic: 'Creatine and hair loss', area: 'appearance', summary: 'One small 2009 study saw a DHT rise; no study has shown hair loss.', confidence: 'low', sources: src } }; return r.fulfill({ json: { parts: [{ functionCall: call }], calls: [call], text: '' } }); }
+  if (fr && fr.name === 'save_research') return r.fulfill({ json: { parts: [{ text: 'Saved that research.' }], calls: [], text: 'Saved that research.' } });
+  if (body.tools && /look up/i.test(JSON.stringify(last))) { searchTools = body.tools.map(t => t.name); const call = { name: 'web_search', args: { query: 'Does creatine cause hair loss?' } }; return r.fulfill({ json: { parts: [{ functionCall: call }], calls: [call], text: '' } }); }
   if (last.parts[0].functionResponse) return r.fulfill({ json: { parts: [{ text: 'Logged it.' }], calls: [], text: 'Logged it.' } });
   if (body.tools && body.tools.length && /ate/i.test(JSON.stringify(last))) return r.fulfill({ json: { parts: [{ functionCall: { name: 'log_food', args: { items: [{ name: 'Chicken breast', grams: 200, kcal: 330, protein: 62, carbs: 0, fat: 7 }] } } }], calls: [{ name: 'log_food', args: { items: [{ name: 'Chicken breast', grams: 200, kcal: 330, protein: 62, carbs: 0, fat: 7 }] } }], text: '' } });
   return r.fulfill({ json: { parts: [{ text: 'Summary: talked about sleep.' }], calls: [], text: 'Summary: talked about sleep.' } });
 });
+let searchTools = [], searchQ = '';
+await page.route('**/api/search', r => { searchQ = r.request().postDataJSON().query; return r.fulfill({ json: { answer: 'No good evidence that creatine causes hair loss.', sources: [{ title: 'pubmed.ncbi.nlm.nih.gov', url: 'https://pubmed.ncbi.nlm.nih.gov/19741313/' }], searchedAt: new Date().toISOString() } }); });
 await page.route('**/api/voice-token', r => r.fulfill({ json: { token: 'auth_tokens/test123', model: 'gemini-3.8-live' } }));
 await page.route(SB + '/**', async r => {
   const u = new URL(r.request().url()); const m = r.request().method();
@@ -80,6 +86,12 @@ const month = [...store.values()].find(x => x.kind === 'month');
 ok(month && JSON.stringify(month.body).includes('Chicken breast'), 'food reached the database');
 ok(audit.some(a => a.source === 'chat' && a.action === 'log_food'), 'audit row written for the chat action');
 
+await page.fill('#coach-in', 'look up whether creatine causes hair loss'); await page.click('[data-a=send]'); await page.waitForTimeout(3000);
+ok(searchTools.includes('web_search') && searchTools.includes('save_research'), 'text coach has web_search and save_research');
+ok(/creatine/i.test(searchQ), 'coach searched the internet (server endpoint)');
+const brainDoc = store.get('brain'); ok(brainDoc && JSON.stringify(brainDoc.body).includes('Creatine and hair loss') && JSON.stringify(brainDoc.body).includes('pubmed'), 'research note with source saved to the knowledge base');
+ok(/Saved that research/.test(await page.locator('#chat').innerText()), 'coach confirmed after the save');
+
 log('3. Live voice call');
 await page.evaluate(() => { location.hash = 'talk'; }); await page.waitForTimeout(600);
 ok(await page.locator('[data-a=vcStart]').count() === 1, 'voice screen shows Talk button');
@@ -90,7 +102,7 @@ ok(/BidiGenerateContentConstrained\?access_token=auth_tokens\/test123/.test(live
 ok(live.setup && JSON.stringify(live.setup.systemInstruction).includes('LIVE VOICE CALL'), 'voice rules sent');
 ok(live.setup && JSON.stringify(live.setup.systemInstruction).includes('Profile'), 'Steadfast brief (brain) sent');
 const fnNames = live.setup ? live.setup.tools[0].functionDeclarations.map(f => f.name) : [];
-ok(fnNames.includes('lookup') && fnNames.includes('log_food') && fnNames.includes('confirm_pending'), 'same app tools + confirm_pending declared (' + fnNames.length + ')');
+ok(fnNames.includes('lookup') && fnNames.includes('log_food') && fnNames.includes('confirm_pending') && fnNames.includes('web_search'), 'same app tools + confirm_pending declared (' + fnNames.length + ')');
 ok(live.clientContent >= 1, 'coach was asked to greet');
 await page.waitForTimeout(1500);
 ok(live.audioFrames > 5, 'mic audio streaming (' + live.audioFrames + ' frames)');

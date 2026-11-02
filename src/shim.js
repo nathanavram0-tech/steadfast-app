@@ -104,6 +104,48 @@ function collection() {
   return api;
 }
 
+
+/* ---------- extra coach tools in the standalone app: internet research + saving what it learns ---------- */
+export const READ_TOOLS = new Set(['lookup', 'web_search']);
+async function webSearch(query) {
+  const token = await authToken();
+  let r;
+  try { r = await fetch('/api/search', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ query }) }); }
+  catch (e) { return { error: 'No connection, so I could not search.' }; }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) return { error: j.message || 'Search failed.' };
+  return { answer: j.answer, sources: j.sources, searchedAt: j.searchedAt, note: 'Answer from a live web search. Give the exact answer first, mention where it came from, and say if the evidence is weak. Do not add facts the sources do not support.' };
+}
+function extraTools() {
+  return [
+    { name: 'web_search',
+      description: 'Search the internet for a precise, current answer with sources. Use it for any factual question you are not certain about (nutrition facts, research findings, product info, prices, rules, news, how-tos), and before saving new research. Check the knowledge base first with lookup topic "research". Ask one clear question per call.',
+      inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'The exact question to answer, with any useful detail (e.g. units, location, year).' } }, required: ['query'] },
+      execute: async (a) => webSearch(String(a.query || '')) },
+    { name: 'save_research',
+      description: 'Save a research finding to Steadfast\'s knowledge base so every coach can use it later (lookup topic "research"). Use when Nathan asks you to learn or remember a finding, or after a web_search whose answer matters for his plan. Only save what the sources support, with their links. Updates the note if the topic already exists.',
+      inputSchema: { type: 'object', properties: {
+        topic: { type: 'string' }, area: { type: 'string', description: 'nutrition, training, sleep, appearance, money, faith, business, health or other' },
+        summary: { type: 'string', description: '2-4 sentences, plain language, with the key numbers' },
+        points: { type: 'array', items: { type: 'string' } },
+        confidence: { type: 'string', enum: ['low', 'moderate', 'high'] },
+        sources: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, url: { type: 'string' } } } } },
+        required: ['topic', 'summary', 'sources'] },
+      execute: async (a) => {
+        const SF = window.SF; if (!SF || !SF.brain) return { error: 'Not ready.' };
+        const B = SF.brain(); const topic = String(a.topic || '').trim().slice(0, 120); if (!topic) return { error: 'Topic needed.' };
+        const srcs = (Array.isArray(a.sources) ? a.sources : []).filter(x => x && x.url).slice(0, 8).map(x => ({ title: String(x.title || 'source').slice(0, 200), url: String(x.url).slice(0, 500), type: 'web' }));
+        if (!srcs.length) return { error: 'Save research only with at least one source link from web_search.' };
+        const id = 'kb-' + topic.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40);
+        const note = { id, topic, area: String(a.area || 'other'), updated: new Date().toISOString().slice(0, 10), confidence: a.confidence || 'moderate', summary: String(a.summary || '').slice(0, 1200), points: (a.points || []).slice(0, 8).map(String), sources: srcs, by: 'web' };
+        const i = B.kb.findIndex(k => k.id === id || (k.topic || '').toLowerCase() === topic.toLowerCase());
+        if (i >= 0) B.kb[i] = { ...B.kb[i], ...note }; else B.kb.push(note);
+        SF.touch('brain');
+        return { saved: i >= 0 ? 'updated' : 'added', topic, notes: B.kb.length };
+      } },
+  ];
+}
+
 /* ---------- sample: Claude-runtime-compatible AI calls, backed by /api/coach ---------- */
 const LIMITS = { maxPromptBytes: 900000, tools: { maxCount: 20 }, images: { maxCount: 4, mediaTypes: ['image/jpeg', 'image/png', 'image/webp'] } };
 function blobToB64(b) { return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(',')[1]); fr.onerror = rej; fr.readAsDataURL(b); }); }
@@ -126,7 +168,8 @@ async function sample(input, opts = {}) {
     const last = [...contents].reverse().find(c => c.role === 'user');
     for (const b of opts.images.slice(0, LIMITS.images.maxCount)) last.parts.push({ inlineData: { mimeType: b.type || 'image/jpeg', data: await blobToB64(b) } });
   }
-  const tools = opts.tools || [];
+  const tools = [...(opts.tools || [])];
+  if (tools.length && !tools.some(t => t.name === 'web_search')) tools.push(...extraTools());
   const decl = tools.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
   let text = '';
   for (let round = 0; round < 8; round++) {
@@ -140,7 +183,7 @@ async function sample(input, opts = {}) {
         try { result = t ? await t.execute(c.args || {}) : { error: 'unknown tool ' + c.name }; }
         catch (e) { result = { error: String((e && e.message) || e) }; }
         // Writes: confirm the change reached the database before the coach says it's done.
-        if (t && c.name !== 'lookup' && !(result && result.error) && window.SF && window.SF.verifySaved) {
+        if (t && !READ_TOOLS.has(c.name) && !(result && result.error) && window.SF && window.SF.verifySaved) {
           const v = await window.SF.verifySaved();
           result = { result, saved: v.saved, ...(v.note ? { note: v.note } : {}) };
           window.SteadfastRuntime.audit('chat', c.name, { args: c.args || {}, saved: v.saved });
@@ -185,4 +228,4 @@ window.claude = {
     return null; // assets, mcp, room ... not used in the standalone app
   },
 };
-window.SteadfastRuntime = { authToken, signOut: () => S.sb && S.sb.auth.signOut(), user: () => S.user, ready: () => S.ready, configError: () => S.cfgErr, audit: async (source, action, detail) => { try { await S.sb.from('audit').insert({ user_id: S.user.id, source, action, detail }); } catch (e) {} } };
+window.SteadfastRuntime = { extraTools, READ_TOOLS, authToken, signOut: () => S.sb && S.sb.auth.signOut(), user: () => S.user, ready: () => S.ready, configError: () => S.cfgErr, audit: async (source, action, detail) => { try { await S.sb.from('audit').insert({ user_id: S.user.id, source, action, detail }); } catch (e) {} } };
