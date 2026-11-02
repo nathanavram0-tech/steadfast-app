@@ -116,8 +116,20 @@ async function webSearch(query) {
   if (!r.ok) return { error: j.message || 'Search failed.' };
   return { answer: j.answer, sources: j.sources, searchedAt: j.searchedAt, note: 'Answer from a live web search. Give the exact answer first, mention where it came from, and say if the evidence is weak. Do not add facts the sources do not support.' };
 }
-function extraTools() {
-  return [
+function transferTool() {
+  const SF = window.SF; const keys = ['main', ...((SF && SF.TEAM) || [])];
+  return { name: 'transfer_to_coach',
+    description: 'Send Nathan to a teammate\'s chat, with his question, when it belongs in their lane. The teammate answers right away. Coaches: ' + keys.map(k => `${k} = ${SF.pname(k)} the ${SF.AG(k).name} (${SF.AG(k).role})`).join('; '),
+    inputSchema: { type: 'object', properties: { coach: { type: 'string', enum: keys }, question: { type: 'string', description: 'His question, in his words, for the teammate.' } }, required: ['coach', 'question'] },
+    execute: async (a) => {
+      const k = String(a.coach || ''); if (!keys.includes(k) || k === SF.UI.agent) return { error: 'Pick a different coach.' };
+      const q = String(a.question || '').slice(0, 1500);
+      setTimeout(() => { location.hash = 'coach/' + k; setTimeout(() => { if (q) SF.coachSend(q); }, 700); }, 900);
+      return { ok: true, note: `Sending him to ${SF.pname(k)} now. Keep your reply to one short line.` };
+    } };
+}
+function extraTools(opts = {}) {
+  return [...(opts.text && window.SF && window.SF.pname ? [transferTool()] : []),
     { name: 'web_search',
       description: 'Search the internet for a precise, current answer with sources. Use it for any factual question you are not certain about (nutrition facts, research findings, product info, prices, rules, news, how-tos), and before saving new research. Saved notes (lookup topic "research") are a starting point, not the limit: search again for newer or better evidence whenever he asks you to look something up, when a note is old, thin or low confidence, or when the question goes beyond it. Ask one clear question per call; for a bigger question, run 2-3 searches from different angles (for example causes, what reviews say, what experts recommend). Say what is new compared with what was already saved.',
       inputSchema: { type: 'object', properties: { query: { type: 'string', description: 'The exact question to answer, with any useful detail (e.g. units, location, year).' } }, required: ['query'] },
@@ -169,7 +181,7 @@ async function sample(input, opts = {}) {
     for (const b of opts.images.slice(0, LIMITS.images.maxCount)) last.parts.push({ inlineData: { mimeType: b.type || 'image/jpeg', data: await blobToB64(b) } });
   }
   const tools = [...(opts.tools || [])];
-  if (tools.length && !tools.some(t => t.name === 'web_search')) tools.push(...extraTools());
+  if (tools.length && !tools.some(t => t.name === 'web_search')) tools.push(...extraTools({ text: true }));
   const decl = tools.map(t => ({ name: t.name, description: t.description, inputSchema: t.inputSchema }));
   let text = '';
   for (let round = 0; round < 8; round++) {

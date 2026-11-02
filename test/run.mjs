@@ -31,6 +31,8 @@ await page.route('**/api/coach', async r => {
   coachCalls++; const body = r.request().postDataJSON(); if (JSON.stringify(body.contents).includes('inlineData')) imgCalls++;
   const last = body.contents[body.contents.length - 1];
   const fr = last.parts[0].functionResponse;
+  if (fr && fr.name === 'transfer_to_coach') return r.fulfill({ json: { parts: [{ text: "That's Jay's area, sending you over." }], calls: [], text: "That's Jay's area, sending you over." } });
+  if (body.tools && /what should i eat after/i.test(JSON.stringify(last))) { transferSys = JSON.stringify(body); if (/YOU ARE Jay/.test(transferSys)) { fuelGotIt = true; return r.fulfill({ json: { parts: [{ text: 'Jay here: 40 g protein and rice.' }], calls: [], text: 'Jay here: 40 g protein and rice.' } }); } const call = { name: 'transfer_to_coach', args: { coach: 'fuel', question: 'What should I eat after my workout?' } }; return r.fulfill({ json: { parts: [{ functionCall: call }], calls: [call], text: '' } }); }
   if (fr && fr.name === 'web_search') { const src = fr.response.result.sources; const call = { name: 'save_research', args: { topic: 'Creatine and hair loss', area: 'appearance', summary: 'One small 2009 study saw a DHT rise; no study has shown hair loss.', confidence: 'low', sources: src } }; return r.fulfill({ json: { parts: [{ functionCall: call }], calls: [call], text: '' } }); }
   if (fr && fr.name === 'save_research') return r.fulfill({ json: { parts: [{ text: 'Saved that research.' }], calls: [], text: 'Saved that research.' } });
   if (body.tools && /look up/i.test(JSON.stringify(last))) { searchTools = body.tools.map(t => t.name); const call = { name: 'web_search', args: { query: 'Does creatine cause hair loss?' } }; return r.fulfill({ json: { parts: [{ functionCall: call }], calls: [call], text: '' } }); }
@@ -38,7 +40,7 @@ await page.route('**/api/coach', async r => {
   if (body.tools && body.tools.length && /ate/i.test(JSON.stringify(last))) return r.fulfill({ json: { parts: [{ functionCall: { name: 'log_food', args: { items: [{ name: 'Chicken breast', grams: 200, kcal: 330, protein: 62, carbs: 0, fat: 7 }] } } }], calls: [{ name: 'log_food', args: { items: [{ name: 'Chicken breast', grams: 200, kcal: 330, protein: 62, carbs: 0, fat: 7 }] } }], text: '' } });
   return r.fulfill({ json: { parts: [{ text: 'Summary: talked about sleep.' }], calls: [], text: 'Summary: talked about sleep.' } });
 });
-let searchTools = [], searchQ = '', imgCalls = 0;
+let searchTools = [], searchQ = '', imgCalls = 0, transferSys = '', fuelGotIt = false;
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC', 'base64');
 await page.route('**/api/search', r => { searchQ = r.request().postDataJSON().query; return r.fulfill({ json: { answer: 'No good evidence that creatine causes hair loss.', sources: [{ title: 'pubmed.ncbi.nlm.nih.gov', url: 'https://pubmed.ncbi.nlm.nih.gov/19741313/' }], searchedAt: new Date().toISOString() } }); });
 await page.route('**/api/voice-token', r => r.fulfill({ json: { token: 'auth_tokens/test123', model: 'gemini-3.8-live' } }));
@@ -99,6 +101,14 @@ await page.setInputFiles('#coach-photo', { name: 'me.png', mimeType: 'image/png'
 await page.fill('#coach-in', 'what should I work on in this physique photo'); await page.click('[data-a=send]'); await page.waitForTimeout(2500);
 ok(imgCalls > before, 'photo sent in chat reaches the AI as an image');
 
+// specialists stay in their lane and transfer
+await page.evaluate(() => { location.hash = 'coach/trainer'; }); await page.waitForTimeout(600);
+await page.fill('#coach-in', 'what should I eat after my workout'); await page.click('[data-a=send]'); await page.waitForTimeout(4500);
+ok((await page.evaluate(() => location.hash)) === '#coach/fuel', 'trainer transfers a food question to Fuel');
+ok(fuelGotIt, 'Jay (Fuel) receives the question and answers');
+ok(/STAY IN YOUR LANE/.test(transferSys), 'specialists are told to stay in their lane');
+await page.evaluate(() => { location.hash = 'coach'; }); await page.waitForTimeout(400);
+
 log('3. Live voice call');
 await page.evaluate(() => { location.hash = 'talk'; }); await page.waitForTimeout(600);
 ok(await page.locator('[data-a=vcStart]').count() === 1, 'voice screen shows Talk button');
@@ -107,7 +117,7 @@ await page.waitForTimeout(2500);
 ok(live.setup && /gemini-3\.8-live/.test(live.setup.model), 'connected to Live with the token-locked model');
 ok(/BidiGenerateContentConstrained\?access_token=auth_tokens\/test123/.test(live.url), 'used the short-lived token (not an API key)');
 ok(live.setup && JSON.stringify(live.setup.systemInstruction).includes('LIVE VOICE CALL'), 'voice rules sent');
-ok(live.setup && JSON.stringify(live.setup.generationConfig || live.setup).includes('Charon') && JSON.stringify(live.setup.systemInstruction).includes('Marcus'), 'head coach Marcus uses his own voice (Charon)');
+ok(live.setup && JSON.stringify(live.setup.generationConfig || live.setup).includes('Sadaltager') && JSON.stringify(live.setup.systemInstruction).includes('Marcus'), 'head coach Marcus uses his own voice (Sadaltager, knowledgeable)');
 ok(live.setup && JSON.stringify(live.setup.systemInstruction).includes('Profile'), 'Steadfast brief (brain) sent');
 const fnNames = live.setup ? live.setup.tools[0].functionDeclarations.map(f => f.name) : [];
 ok(fnNames.includes('lookup') && fnNames.includes('log_food') && fnNames.includes('confirm_pending') && fnNames.includes('web_search'), 'same app tools + confirm_pending declared (' + fnNames.length + ')');
@@ -165,7 +175,7 @@ const nSetups = live.setups.length;
 live.ws.send(JSON.stringify({ toolCall: { functionCalls: [{ id: 'fc4', name: 'switch_coach', args: { coach: 'trainer', reason: 'log his leg workout' } }] } }));
 await page.waitForTimeout(2500);
 const s2 = live.setups[live.setups.length - 1];
-ok(live.setups.length === nSetups + 1 && JSON.stringify(s2).includes('Fenrir'), 'handoff reconnects with the trainer\'s own voice (Fenrir)');
+ok(live.setups.length === nSetups + 1 && JSON.stringify(s2).includes('Algenib'), 'handoff reconnects with the trainer\'s own voice (Algenib, gravelly man)');
 ok(JSON.stringify(s2.systemInstruction).includes('YOU ARE Rex') && JSON.stringify(s2.systemInstruction).includes('THIS CALL SO FAR'), 'trainer Rex gets his role plus the call so far');
 ok(/Rex/.test(await page.locator('.coach-name').first().innerText()), 'screen shows Rex after the handoff');
 ok(['listening', 'speaking', 'thinking'].includes(await page.evaluate(() => window.SteadfastVoice.state())), 'call stays live through the handoff');

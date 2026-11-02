@@ -7,13 +7,25 @@ import { GoogleGenAI, Modality } from '@google/genai';
 const SF = window.SF;
 const RT = window.SteadfastRuntime;
 // Each coach has its own Gemini voice. Nathan can change names and voices on the Talk screen (Your team).
+// Gemini's 30 prebuilt voices (style words from Google's speech-generation docs, gender from Google Cloud's Gemini-TTS list).
 const VOICES = [
-  ['Charon', 'Man, deep and steady'], ['Fenrir', 'Man, energetic'], ['Orus', 'Man, firm and calm'], ['Puck', 'Man, upbeat'],
-  ['Kore', 'Woman, firm'], ['Aoede', 'Woman, bright and easy'], ['Leda', 'Woman, youthful'], ['Zephyr', 'Woman, light and clear'],
+  ['Sadaltager', 'Man, knowledgeable'], ['Algenib', 'Man, gravelly'], ['Achird', 'Man, friendly'], ['Algieba', 'Man, smooth'],
+  ['Charon', 'Man, informative'], ['Fenrir', 'Man, excitable'], ['Orus', 'Man, firm'], ['Puck', 'Man, upbeat'], ['Alnilam', 'Man, firm'],
+  ['Iapetus', 'Man, clear'], ['Schedar', 'Man, even'], ['Rasalgethi', 'Man, informative'], ['Umbriel', 'Man, easy-going'],
+  ['Enceladus', 'Man, breathy'], ['Sadachbia', 'Man, lively'], ['Zubenelgenubi', 'Man, casual'],
+  ['Kore', 'Woman, firm'], ['Aoede', 'Woman, breezy'], ['Pulcherrima', 'Woman, forward'], ['Sulafat', 'Woman, warm'],
+  ['Zephyr', 'Woman, bright'], ['Leda', 'Woman, youthful'], ['Callirrhoe', 'Woman, easy-going'], ['Autonoe', 'Woman, bright'],
+  ['Despina', 'Woman, smooth'], ['Erinome', 'Woman, clear'], ['Laomedeia', 'Woman, upbeat'], ['Achernar', 'Woman, soft'],
+  ['Gacrux', 'Woman, mature'], ['Vindemiatrix', 'Woman, gentle'],
 ];
-const DEFAULT_VOICE = { main: 'Charon', fuel: 'Puck', trainer: 'Fenrir', faith: 'Orus', money: 'Kore', glow: 'Aoede', mind: 'Leda' };
+// Matched to each coach as a real person would sound:
+// Marcus, head coach who knows everything: knowledgeable. Rex, strength coach: gravelly. Jay, nutrition: friendly.
+// Elijah, pastor: smooth and calm. Victoria, CFO: firm. Mia, grooming and style: breezy. Nia, discipline: forward.
+const DEFAULT_VOICE = { main: 'Sadaltager', fuel: 'Achird', trainer: 'Algenib', faith: 'Algieba', money: 'Kore', glow: 'Aoede', mind: 'Pulcherrima' };
+// If the live model ever rejects one of the newer voices, fall back to the original eight (same gender and feel).
+const FALLBACK_VOICE = { main: 'Charon', fuel: 'Puck', trainer: 'Fenrir', faith: 'Orus', money: 'Kore', glow: 'Aoede', mind: 'Zephyr' };
 function teamCfg() { const c = SF.S.core; c.coach = c.coach || {}; c.coach.team = c.coach.team || {}; return c.coach.team; }
-function voiceFor(k) { const t = teamCfg()[k]; const v = t && t.voice; return VOICES.some(x => x[0] === v) ? v : (DEFAULT_VOICE[k] || 'Puck'); }
+function voiceFor(k) { if (C.voiceFallback) return FALLBACK_VOICE[k] || 'Puck'; const t = teamCfg()[k]; const v = t && t.voice; return VOICES.some(x => x[0] === v) ? v : (DEFAULT_VOICE[k] || 'Puck'); }
 const TEAM_KEYS = () => ['main', ...SF.TEAM];
 const CONNECT_TIMEOUT_MS = 15000;
 
@@ -210,6 +222,7 @@ async function doHandoff() {
 }
 
 function onClose(e) {
+  if (!C.voiceFallback && e && /voice/i.test(String(e.reason || ''))) { C.voiceFallback = true; C.retried = false; reconnect('voice'); return; }
   if (C.closing || C.state === 'ended' || C.state === 'idle') return;
   if (document.visibilityState === 'hidden') { setState('paused', 'The call paused when you left the app. Tap Resume to keep going.'); return; }
   if (!C.retried) { reconnect('closed'); return; }

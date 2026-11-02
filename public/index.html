@@ -2056,8 +2056,8 @@ function teamNotes(){
 }
 function agentPrompt(){
   const a=AG(),others=['main',...TEAM].filter(k=>k!==UI.agent).map(k=>`${pname(k)} the ${AG(k).name} (${AG(k).role.toLowerCase()})`).join(', ');
-  if(UI.agent==='main')return `ON THIS CHAT YOU ARE ${pname('main')}, the head coach (COACH). Your name is ${pname('main')}; use it when you introduce yourself. Nathan also has specialist coaches in the app: ${others}. They share your data and memory. Handle anything yourself; when something deserves a deeper session, you can mention the specialist by name.\n\n`;
-  return `ON THIS CHAT YOU ARE ${pname()}, the ${a.name}: Nathan's ${a.role.toLowerCase()} coach inside Steadfast, with your own personality. You are one of a team: ${others}. Everyone shares the same app data, memory and tools.\nYOUR LANE: ${a.lane}\nGo deep on your lane. If he asks about something outside it, still help briefly (and log it with the tools if he did it), then say which coach to take it to for more. Call yourself ${a.name}, never Coach.\n\n`;
+  if(UI.agent==='main')return `ON THIS CHAT YOU ARE ${pname('main')}, the head coach (COACH). Your name is ${pname('main')}; use it when you introduce yourself. Nathan also has specialist coaches in the app: ${others}. They share your data and memory. You know everything and can talk about anything, so answer it yourself. Only hand him to a specialist when he asks for one or wants a deep session on their lane (call transfer_to_coach, or switch_coach on a live call).\n\n`;
+  return `ON THIS CHAT YOU ARE ${pname()}, the ${a.name}: Nathan's ${a.role.toLowerCase()} coach inside Steadfast, with your own personality. You are one of a team: ${others}. Everyone shares the same app data, memory and tools.\nYOUR LANE: ${a.lane}\nGo deep on your lane. STAY IN YOUR LANE: you coach only on your lane. If he asks about something outside it (food for the trainer, training for Fuel, money for Glow, and so on), don't answer it yourself. Say one short line naming the right teammate, for example "That's Jay's area. Fuel will give you the exact answer, sending you over now", and call transfer_to_coach (switch_coach on a live call) with that coach and his question. If you don't have that tool, tell him to tap that coach. Quick small talk and encouragement are fine. Marcus the head coach is the one who covers everything. Call yourself ${pname()}, the ${a.name}, never Coach.\n\n`;
 }
 let talkT=0;
 function setTalking(on){document.querySelectorAll('.coach.speaker').forEach(c=>c.classList.toggle('talking',!!on));syncVideos(on)}
@@ -2957,7 +2957,12 @@ const V_FEMALE=/\b(samantha|ava|allison|susan|zoe|nicky|karen|moira|tessa|fiona|
 const V_JOKE=/novelty|bells|bad news|boing|bubbles|cellos|whisper|zarvox|trinoids|wobble|jester|organ|superstar|albert|bahh|hysterical|junior|ralph|grandpa|eddy|reed|rocko|good news/i;
 function voiceScore(v){let s=0;if(/en[-_]US/i.test(v.lang))s+=2;if(/premium|enhanced|neural|natural|online|wavenet|studio/i.test(v.name))s+=7;if(V_MALE.test(v.name))s+=5;if(V_FEMALE.test(v.name))s-=8;if(V_JOKE.test(v.name))s-=30;if(v.localService===false)s+=1;return s}
 function rankedVoices(){if(!VOICES.length)loadVoices();return VOICES.slice().sort((a,b)=>voiceScore(b)-voiceScore(a))}
-function pickVoice(){const want=S.core.coach.voiceName;const r=rankedVoices();return (want&&r.find(v=>v.name===want))||r[0]||null}
+const COACH_SEX={main:'m',fuel:'m',trainer:'m',faith:'m',money:'f',glow:'f',mind:'f'};
+function pickVoice(k){k=k||UI.agent||'main';const want=k==='main'&&S.core.coach.voiceName;const r=rankedVoices();if(want){const w=r.find(v=>v.name===want);if(w)return w}
+  // Each coach gets its own system voice for read-aloud: men for Marcus, Jay, Rex, Elijah; women for Victoria, Mia, Nia.
+  const sex=COACH_SEX[k]||'m',pool=r.filter(v=>!V_JOKE.test(v.name)&&(sex==='f'?V_FEMALE.test(v.name):!V_FEMALE.test(v.name)));
+  const order=Object.keys(COACH_SEX).filter(x=>COACH_SEX[x]===sex),i=Math.max(0,order.indexOf(k));
+  return pool.length?pool[i%pool.length]:(r[0]||null)}
 function voiceLabel(v){return v?v.name.replace(/\s*\(.*?\)\s*/g,' ').replace(/Microsoft |Google /,'').trim():'Default voice'}
 const TTS={said:0,q:0,final:false,keep:[]};
 let speaking=false;
@@ -3345,7 +3350,7 @@ UI.agent=UI.agent||'main';UI.route=parseHash();
 // Explicit bridge from the app's globals to the voice module (keeps the module decoupled).
 window.SF = {
   get S() { return S; }, UI, V, A, I, AGENTS, COACH_RULES,
-  AG, esc, render, go, toast, chatLog, saveChat, touch, pname, TEAM,
+  AG, esc, render, go, toast, chatLog, saveChat, touch, pname, TEAM, coachSend,
   coachTools: (m) => [...coachTools(m), ...((window.SteadfastRuntime && window.SteadfastRuntime.extraTools) ? window.SteadfastRuntime.extraTools() : [])], coachContext, agentPrompt, teamNotes, teamSwitch,
   agentAvatar, actsHtml, mdLite, brain, logEvent, touchQuiet, getSample,
   async verifySaved() {
