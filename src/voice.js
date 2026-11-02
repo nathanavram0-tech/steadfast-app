@@ -56,6 +56,7 @@ const VOICE_RULES = `
 LIVE VOICE CALL: you are on a live, hands-free voice call with Nathan. Talk like a real coach on the phone: relaxed, direct, warm. Usually 1-3 short sentences, then let him talk. Ask one sharp question when you need more info before advising. Never read lists out loud; give the top one or two things and offer more. Say numbers naturally ("about two hundred grams"). No markdown or symbols. If he interrupts, drop your point and answer the new thing. Remember everything said earlier in this call.
 DATA: before answering about his numbers, call lookup. Say whether something is logged, an estimate, or not logged. Never invent data.
 TEAM: you are one of Nathan's coaches, each with their own name and voice, all sharing the same data, memory and tools. Use your own name. If he asks for another coach, or the topic is clearly their lane and he agrees, call switch_coach.
+PHOTOS: you can see photos he shows you on the call (they arrive as a camera image). Never say you can't see or analyze photos; if none arrived, ask him to tap the camera button and send it again.
 RESEARCH: for facts you are not sure of (food values, studies, products, prices, rules, news), say "let me look that up", call web_search, then give the exact answer first and briefly say where it came from. Never guess. If he asks you to learn or remember a finding, call save_research with the sources.
 ACTIONS: you can change Steadfast with your tools while you talk. Only say something is saved after the tool result says it was saved. When a tool says a change needs his confirmation, tell him briefly what will change and ask "want me to do it?" When he clearly says yes, call confirm_pending with decision "confirm"; if no, "cancel".`;
 
@@ -413,8 +414,15 @@ async function sendPhoto(file) {
   if (!C.session) return;
   try {
     const data = await shrink(file);
+    // Send the photo as camera frames first, then ask about it once it has arrived (otherwise the
+    // question can get there before the picture and the coach says it can't see anything).
     C.session.sendRealtimeInput({ video: { data, mimeType: 'image/jpeg' } });
-    C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: '(Nathan just showed you a photo of himself on camera. Look closely and tell him honestly what you see in your lane: physique and weak points to bring up, or skin, puffiness, grooming and which haircut or beard would suit his face. Describe only what is visible, name lighting or angle limits, never diagnose, and offer to look up anything with web_search.)' }] }], turnComplete: true });
+    await new Promise(r => setTimeout(r, 500));
+    if (!C.session) return;
+    C.session.sendRealtimeInput({ video: { data, mimeType: 'image/jpeg' } });
+    await new Promise(r => setTimeout(r, 700));
+    if (!C.session) return;
+    C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: '(Nathan just showed you a photo of himself: it is the camera image you just received. You can see it. Look closely and tell him honestly what you see in your lane: physique and weak points to bring up, or skin, puffiness, grooming and which haircut or beard would suit his face. Describe only what is visible, name lighting or angle limits, never diagnose, and offer to look up anything with web_search.)' }] }], turnComplete: true });
     C.lines.push({ who: 'you', text: '[showed a photo]' }); SF.chatLog(C.agent).push({ role: 'me', text: '[Photo shown on the call]', ts: Date.now(), voice: true });
     RT && RT.audit('voice', 'photo_shown', { agent: C.agent }); setState('thinking');
   } catch (e) { SF.toast((e && e.message) || 'Could not send the photo.'); }
