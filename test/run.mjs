@@ -65,7 +65,7 @@ await page.routeWebSocket(/generativelanguage\.googleapis\.com/, ws => {
   ws.onMessage(raw => {
     const m = JSON.parse(String(raw));
     if (m.setup) { live.setup = m.setup; (live.setups = live.setups || []).push(m.setup); send({ setupComplete: {} }); return; }
-    if (m.clientContent) { live.clientContent++; send({ serverContent: { outputTranscription: { text: 'Hey Nathan, what\'s going on?' } } }); send({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data: Buffer.alloc(24000 * 2 * 0.6).toString('base64') } }] } } }); send({ serverContent: { turnComplete: true } }); return; }
+    if (m.clientContent) { live.clientContent++; live.lastClient = JSON.stringify(m.clientContent); send({ serverContent: { outputTranscription: { text: 'Hey Nathan, what\'s going on?' } } }); send({ serverContent: { modelTurn: { parts: [{ inlineData: { mimeType: 'audio/pcm;rate=24000', data: Buffer.alloc(24000 * 2 * 0.6).toString('base64') } }] } } }); send({ serverContent: { turnComplete: true } }); return; }
     if (m.realtimeInput && m.realtimeInput.audio) { live.audioFrames++; return; }
     if (m.realtimeInput && m.realtimeInput.video) { live.video = (live.video || 0) + 1; return; }
     if (m.toolResponse) { live.toolResponses.push(m.toolResponse); send({ serverContent: { outputTranscription: { text: 'Done, logged two hundred grams of chicken.' } } }); send({ serverContent: { turnComplete: true } }); return; }
@@ -167,8 +167,10 @@ const out3 = live.toolResponses[2] && live.toolResponses[2].functionResponses[0]
 ok(out3 && out3.ok && out3.applied.includes('done'), 'spoken "yes" applies the change');
 
 // show the coach a photo mid-call
-await page.setInputFiles('#vc-photo', { name: 'me.png', mimeType: 'image/png', buffer: PNG }); await page.waitForTimeout(1200);
-ok(live.video >= 1, 'photo shown during the call reaches the live coach');
+const imgBefore = imgCalls;
+await page.setInputFiles('#vc-photo', { name: 'me.png', mimeType: 'image/png', buffer: PNG }); await page.waitForTimeout(2500);
+ok(imgCalls > imgBefore, 'photo shown on the call is looked at by the vision model');
+ok(/showed you a photo/.test(live.lastClient || '') && /talked about sleep/.test(live.lastClient || ''), 'live coach receives what is in the photo and talks about it');
 
 // hand the call to the trainer: new voice, new name, same call
 const nSetups = live.setups.length;

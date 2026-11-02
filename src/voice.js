@@ -362,7 +362,7 @@ function transcriptHtml() {
 }
 function stateBody() {
   const s = C.state, live = ['listening', 'thinking', 'speaking', 'connecting'].includes(s);
-  const caption = s === 'error' || s === 'paused' ? `<p class="vc-err">${SF.esc(C.err)}</p>` : s === 'ended' ? `<p class="vc-sub">Saved to your chat with ${coachName()}. ${C.lines.length ? '' : ''}</p>` : s === 'idle' ? `<p class="vc-sub">Talk naturally and cut in anytime. ${coachName()} knows your Steadfast data and can update it for you.</p>` : s === 'listening' && C.muted ? '<p class="vc-sub">You\'re muted.</p>' : `<p class="vc-sub">${SF.esc(C.coachLine ? C.coachLine.slice(-140) : C.userLine ? C.userLine.slice(-140) : '')}</p>`;
+  const caption = s === 'error' || s === 'paused' ? `<p class="vc-err">${SF.esc(C.err)}</p>` : s === 'ended' ? `<p class="vc-sub">Saved to your chat with ${coachName()}. ${C.lines.length ? '' : ''}</p>` : s === 'idle' ? `<p class="vc-sub">Talk naturally and cut in anytime. ${coachName()} knows your Steadfast data and can update it for you.</p>` : C.photoNote ? `<p class="vc-sub">${SF.esc(C.photoNote)}</p>` : s === 'listening' && C.muted ? '<p class="vc-sub">You\'re muted.</p>' : `<p class="vc-sub">${SF.esc(C.coachLine ? C.coachLine.slice(-140) : C.userLine ? C.userLine.slice(-140) : '')}</p>`;
   const main = s === 'idle' || s === 'ended'
     ? `<button class="vc-go" data-a="vcStart">${SF.I.mic}<span>${s === 'ended' ? 'Call again' : 'Talk to ' + coachName()}</span></button>`
     : s === 'error' ? `<button class="vc-go" data-a="vcStart">${SF.I.mic}<span>${C.errCode === 'closed' ? 'Reconnect' : 'Try again'}</span></button>`
@@ -410,22 +410,34 @@ function shrink(file, max = 1024) {
     im.src = url;
   });
 }
+const LOOK = {
+  trainer: 'physique: each visible muscle group (shoulders, chest, arms, back, legs, core), proportions and symmetry, posture, rough body-fat range, and the 1-3 areas that most need bringing up with the training emphasis that usually helps',
+  glow: 'face and grooming: skin (texture, redness, breakouts, dryness or shine as it appears), puffiness, face shape, hair and beard, brows, and 1-2 haircut or beard styles that usually suit that face shape',
+};
 async function sendPhoto(file) {
   if (!C.session) return;
+  const agent = C.agent;
+  C.lines.push({ who: 'you', text: '[showed a photo]' }); SF.chatLog(agent).push({ role: 'me', text: '[Photo shown on the call]', ts: Date.now(), voice: true });
+  setState('thinking', ''); C.coachLine = ''; C.photoNote = 'Looking at your photo…'; paint();
   try {
     const data = await shrink(file);
-    // Send the photo as camera frames first, then ask about it once it has arrived (otherwise the
-    // question can get there before the picture and the coach says it can't see anything).
-    C.session.sendRealtimeInput({ video: { data, mimeType: 'image/jpeg' } });
-    await new Promise(r => setTimeout(r, 500));
+    // Live calls can't reliably take still images, so the app's vision model looks at the photo
+    // and hands the coach a detailed description to talk about. Same photo, same honesty rules.
+    const sample = await SF.getSample();
+    if (!sample) throw new Error('Photo analysis is not available right now.');
+    const blob = await (await fetch('data:image/jpeg;base64,' + data)).blob();
+    const focus = LOOK[agent] || 'whatever the photo shows: if it is his physique, cover ' + LOOK.trainer + '; if it is his face, cover ' + LOOK.glow;
+    const r = await sample(`You are looking at a photo Nathan (20, 6'4", lean bulking, lifting 3-4 years) just showed his coach during a voice call. Describe precisely what is visible and assess ${focus}. Be honest and specific, describe only what you can see, say when lighting, angle or pump limits what you can tell, never diagnose a medical or skin condition, and keep it under 170 words of plain text.`, { images: [blob], cache: false });
+    const seen = String((r && r.text) || '').trim();
+    if (!seen) throw new Error('Could not read that photo.');
     if (!C.session) return;
-    C.session.sendRealtimeInput({ video: { data, mimeType: 'image/jpeg' } });
-    await new Promise(r => setTimeout(r, 700));
-    if (!C.session) return;
-    C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: '(Nathan just showed you a photo of himself: it is the camera image you just received. You can see it. Look closely and tell him honestly what you see in your lane: physique and weak points to bring up, or skin, puffiness, grooming and which haircut or beard would suit his face. Describe only what is visible, name lighting or angle limits, never diagnose, and offer to look up anything with web_search.)' }] }], turnComplete: true });
-    C.lines.push({ who: 'you', text: '[showed a photo]' }); SF.chatLog(C.agent).push({ role: 'me', text: '[Photo shown on the call]', ts: Date.now(), voice: true });
-    RT && RT.audit('voice', 'photo_shown', { agent: C.agent }); setState('thinking');
-  } catch (e) { SF.toast((e && e.message) || 'Could not send the photo.'); }
+    C.photoNote = '';
+    C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: `(Nathan just showed you a photo on the call. You can see it; this is exactly what is in it: """${seen}""". Talk to him about it as yourself, out loud, as if you are looking at it: the most important things you see in your lane and what to work on first. Keep it conversational, 3-5 sentences, then ask what he wants to focus on. Don't mention a description or another model.)` }] }], turnComplete: true });
+    const m = SF.chatLog(agent); m.push({ role: 'coach', text: 'What I saw in your photo: ' + seen, ts: Date.now() + 1, voice: true }); SF.saveChat();
+    RT && RT.audit('voice', 'photo_shown', { agent });
+  } catch (e) {
+    C.photoNote = ''; setState('listening'); SF.toast((e && (e.message || e.code)) || 'Could not send the photo.');
+  }
 }
 document.addEventListener('change', (e) => { const el = e.target; if (el && el.dataset && el.dataset.vcPhoto && el.files && el.files[0]) { sendPhoto(el.files[0]); el.value = ''; } });
 
