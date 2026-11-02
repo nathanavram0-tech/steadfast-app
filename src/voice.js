@@ -411,8 +411,8 @@ function shrink(file, max = 1024) {
   });
 }
 const LOOK = {
-  trainer: 'physique: each visible muscle group (shoulders, chest, arms, back, legs, core), proportions and symmetry, posture, rough body-fat range, and the 1-3 areas that most need bringing up with the training emphasis that usually helps',
-  glow: 'face and grooming: skin (texture, redness, breakouts, dryness or shine as it appears), puffiness, face shape, hair and beard, brows, and 1-2 haircut or beard styles that usually suit that face shape',
+  trainer: 'physique: go muscle by muscle (delts front/side/rear, chest upper/lower, biceps, triceps, forearms, lats and upper back, traps, abs and obliques, quads, hamstrings, glutes, calves) for whatever is visible; compare LEFT vs RIGHT for every pair and call out any visible size or shape difference (for example one bicep or one pec looking bigger); proportions (shoulder-to-waist, upper vs lower body), posture (rounded shoulders, pelvic tilt, uneven shoulders), definition and rough body-fat range; then the 1-3 areas that most need bringing up and the training emphasis that usually helps (for example unilateral work for an imbalance)',
+  glow: 'face and grooming: skin tone and evenness (any redness, sallowness, uneven tone or dullness, as it appears in this lighting), texture and pores, breakouts or marks, dryness or shine, under-eye darkness or puffiness, facial puffiness overall, face shape, jawline, hair (length, density, hairline as visible), beard and brows, teeth and lips if visible; then the top 2-3 things to improve first and 1-2 haircut or beard styles that usually suit that face shape',
 };
 async function sendPhoto(file) {
   if (!C.session) return;
@@ -427,7 +427,7 @@ async function sendPhoto(file) {
     if (!sample) throw new Error('Photo analysis is not available right now.');
     const blob = await (await fetch('data:image/jpeg;base64,' + data)).blob();
     const focus = LOOK[agent] || 'whatever the photo shows: if it is his physique, cover ' + LOOK.trainer + '; if it is his face, cover ' + LOOK.glow;
-    const r = await sample(`You are looking at a photo Nathan (20, 6'4", lean bulking, lifting 3-4 years) just showed his coach during a voice call. Describe precisely what is visible and assess ${focus}. Be honest and specific, describe only what you can see, say when lighting, angle or pump limits what you can tell, never diagnose a medical or skin condition, and keep it under 170 words of plain text.`, { images: [blob], cache: false });
+    const r = await sample(`You are looking at a photo Nathan (20, 6'4", lean bulking, lifting 3-4 years) just showed his coach during a voice call. Describe precisely what is visible and assess ${focus}. Be honest and specific, describe only what you can see, say when lighting, angle or pump limits what you can tell, never diagnose a medical or skin condition, and keep it under 260 words of plain text. Be specific and direct like a top coach: name exact areas and sides, not generalities.`, { images: [blob], cache: false });
     const seen = String((r && r.text) || '').trim();
     if (!seen) throw new Error('Could not read that photo.');
     if (!C.session) return;
@@ -436,7 +436,11 @@ async function sendPhoto(file) {
     const m = SF.chatLog(agent); m.push({ role: 'coach', text: 'What I saw in your photo: ' + seen, ts: Date.now() + 1, voice: true }); SF.saveChat();
     RT && RT.audit('voice', 'photo_shown', { agent });
   } catch (e) {
-    C.photoNote = ''; setState('listening'); SF.toast((e && (e.message || e.code)) || 'Could not send the photo.');
+    const why = (e && (e.message || e.code)) || 'unknown error';
+    C.photoNote = 'Couldn\'t analyze that photo: ' + why; setState('listening'); paint();
+    setTimeout(() => { if (C.photoNote.startsWith('Couldn')) { C.photoNote = ''; paint(); } }, 9000);
+    try { C.session && C.session.sendClientContent({ turns: [{ role: 'user', parts: [{ text: `(The photo he just sent could not be analyzed because of a technical problem: ${why}. Tell him that in one short line and ask him to try again or send it in the text chat. Do not say you are unable to see photos in general.)` }] }], turnComplete: true }); } catch (x) {}
+    RT && RT.audit('voice', 'photo_failed', { agent, why: String(why).slice(0, 200) });
   }
 }
 document.addEventListener('change', (e) => { const el = e.target; if (el && el.dataset && el.dataset.vcPhoto && el.files && el.files[0]) { sendPhoto(el.files[0]); el.value = ''; } });

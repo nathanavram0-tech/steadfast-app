@@ -22,5 +22,14 @@ export default async function handler(req, res) {
     try { const r = await grounded('Who won the most recent Super Bowl?'); out.search = { ok: true, model: r.model, answer: r.answer.slice(0, 200), sources: r.sources.length, failedFirst: r.attempts }; }
     catch (e) { out.search = { ok: false, tried: searchModels(), attempts: e.attempts || String(e.message) }; }
   }
+  if (!missing.length && req.query && req.query.vision === '1') {
+    // Sends a tiny red test image to the text model to prove photo analysis works.
+    try {
+      const ai = new GoogleGenAI({ apiKey: env('GEMINI_API_KEY') });
+      const png = 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAIAAABLbSncAAAAEklEQVR4nGP4z8CAFWEXHbQSACj/P8Fu7N9hAAAAAElFTkSuQmCC';
+      const r = await ai.models.generateContent({ model: TEXT_MODEL(), contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/png', data: png } }, { text: 'What single color fills this image? One word.' }] }] });
+      out.vision = { ok: true, model: TEXT_MODEL(), answer: String(r.text || '').slice(0, 60) };
+    } catch (e) { out.vision = { ok: false, model: TEXT_MODEL(), error: String((e && e.message) || e).slice(0, 300) }; }
+  }
   send(res, 200, out);
 }
