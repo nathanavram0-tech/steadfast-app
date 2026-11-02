@@ -18,6 +18,9 @@ export default async function handler(req, res) {
         expireTime: new Date(now + 30 * 60 * 1000).toISOString(),  // call can last up to 30 min
         newSessionExpireTime: new Date(now + 60 * 1000).toISOString(), // must start within 1 min
         liveConnectConstraints: { model: LIVE_MODEL() },          // locked to our model
+        // Lock ONLY the model. Without this, Google locks every setting and silently ignores the
+        // app's coach instructions, tools and voice (the call falls back to a generic assistant).
+        lockAdditionalFields: [],
         httpOptions: { apiVersion: 'v1alpha' },
       },
     });
