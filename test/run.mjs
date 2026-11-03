@@ -274,6 +274,34 @@ await page.keyboard.press('Escape'); await page.waitForTimeout(300);
 const sw3 = await page.evaluate(() => document.documentElement.scrollWidth); ok(sw3 <= 390, 'library fits 390px (' + sw3 + ')');
 await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: 'test/library.png', fullPage: true });
 
+log('4d. Content tracker (Dorani)');
+await page.evaluate(() => { location.hash = 'home'; }); await page.waitForTimeout(500);
+ok(await page.locator('.cc[data-c=content]').count() === 1, 'home shows the Content card');
+await page.evaluate(() => { location.hash = 'content'; }); await page.waitForTimeout(600);
+let ctTxt = await page.locator('#app').innerText();
+ok(/DORANI CONTENT/.test(ctTxt) && /DO THIS NOW/.test(ctTxt) && /Shoot a hook-style trial video/.test(ctTxt) && /0 of 18 today/.test(ctTxt), 'tracker shows the next thing to do and 0 of 18 for today');
+ok(/Instagram trial reels posted/.test(ctTxt) && /Self-shot iPhone videos/.test(ctTxt) && /DORANI/.test(ctTxt) && /YouTube video/.test(ctTxt), 'daily, publish and shoot items from the paper tracker are all there');
+await page.click('.ct-do'); await page.waitForTimeout(300);
+await page.locator('.ct-plus[data-id=d_trial]').click(); await page.locator('.ct-plus[data-id=d_trial]').click(); await page.waitForTimeout(300);
+ctTxt = await page.locator('#app').innerText();
+ok(/3 of 18 today/.test(ctTxt) && /1 of 5 done/.test(ctTxt), 'Done and +1 count up (3 of 18; next shows 1 of 5)');
+await page.locator('.ct-minus[data-id=d_trial]').click(); await page.waitForTimeout(300);
+ok(/2 of 18 today/.test(await page.locator('#app').innerText()), 'minus undoes one');
+await page.locator('.ct-plus[data-id=s_broll]').click(); await page.waitForTimeout(300);
+ok(/1 of 2 this week/.test(await page.locator('#app').innerText()), 'weekly shoot counts for the week');
+await page.click('[data-a=ctLate]'); await page.waitForTimeout(300);
+ok(/until 5:00p|Deadline 5:00p/.test(await page.locator('#ct-clock').innerText()), 'staying later moves today\'s deadline to 5 PM');
+await page.evaluate(() => { location.hash = 'coach/main'; }); await page.waitForTimeout(400);
+const toolRes = await page.evaluate(async () => { const t = SF.coachTools({ acts: [] }).find(x => x.name === 'content'); return t ? await t.execute({ item: 'tiktok', add: 2 }) : null; });
+ok(toolRes && toolRes.item === 'd_tiktok' && toolRes.count === 2, 'coach tool logs "2 TikToks" and confirms the saved count');
+const lk = await page.evaluate(async () => { const t = SF.coachTools({ acts: [] }).find(x => x.name === 'lookup'); return (await t.execute({ topic: 'content' })).data; });
+ok(/Today 4\/18/.test(lk) && /d_tiktok\] TikTok videos posted 2\/2/.test(lk), 'coach can read the tracker (4/18 today)');
+await page.waitForTimeout(1200);
+ok(Object.entries(Object.fromEntries(store)).some(([k, v]) => k.startsWith('m-') && JSON.stringify(v).includes('"d_tiktok":2')), 'counts saved to the database');
+await page.evaluate(() => { location.hash = 'home'; }); await page.waitForTimeout(200); await page.evaluate(() => { location.hash = 'content'; }); await page.waitForTimeout(400);
+const sw4 = await page.evaluate(() => document.documentElement.scrollWidth); ok(sw4 <= 390, 'content tracker fits 390px (' + sw4 + ')');
+await page.evaluate(() => window.scrollTo(0, 0)); await page.screenshot({ path: 'test/content.png', fullPage: true });
+
 log('5. Mobile layout');
 for (const r of ['home', 'talk', 'coach', 'prefs']) { await page.evaluate(r => { location.hash = r; }, r); await page.waitForTimeout(400); const sw = await page.evaluate(() => document.documentElement.scrollWidth); ok(sw <= 390, r + ' fits 390px (' + sw + ')'); }
 await page.evaluate(() => { location.hash = 'talk'; }); await page.waitForTimeout(400); await page.screenshot({ path: 'test/voice-idle.png' });

@@ -510,6 +510,28 @@ body.r-talk #app{padding-bottom:20px}
 .deep-tog{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--muted);padding:4px 10px;border-radius:999px;border:1px solid var(--line);min-height:30px}
 .report-card .rep-text{font-size:15px;line-height:1.55}.report-card .rep-text p{margin:0 0 8px}
 .deep-tog.on{color:#06101C;background:var(--ice);border-color:transparent}
+.ct-now .eyebrow{font-size:11px;letter-spacing:.14em;color:var(--muted);font-weight:800}
+.ct-clock{margin-top:6px;font-family:var(--f-display);font-stretch:112%;font-weight:800;font-size:20px;font-variant-numeric:tabular-nums;color:var(--neon)}
+.ct-now.behind .ct-clock,.ct-now.urgent .ct-clock,.ct-now.missed .ct-clock{color:var(--red)}
+.ct-now.urgent,.ct-now.missed{border-color:rgba(255,59,92,.55);box-shadow:0 0 28px -8px var(--red-glow)}
+.ct-now.done .ct-clock{color:#3DF5A4}
+.ct-act{font-family:var(--f-display);font-stretch:112%;font-weight:800;font-size:24px;line-height:1.15;margin:0}
+.ct-do{min-height:58px;font-size:17px}
+.ct-list{display:flex;flex-direction:column;gap:8px}
+.ct-row{display:flex;align-items:center;gap:8px;min-height:58px;padding:8px 8px 8px 12px;border-radius:14px;background:rgba(141,187,255,.05);border:1px solid var(--line)}
+.ct-row.done{opacity:.62}
+.ct-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}
+.ct-main b{font-size:15px;font-weight:700}
+.ct-main span{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--muted);flex-wrap:wrap}
+.ct-dots{display:inline-flex;gap:4px}.ct-dots i{width:9px;height:9px;border-radius:50%;background:var(--track)}.ct-dots i.on{background:var(--neon);box-shadow:0 0 8px var(--neon)}
+.ct-who{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.08em;padding:2px 6px;border-radius:6px;background:rgba(0,212,255,.12);color:var(--neon)}
+.ct-plus{flex:none;min-width:58px;height:46px;border-radius:12px;border:0;background:var(--neon);color:#04111C;font-weight:900;font-size:17px;display:grid;place-items:center;cursor:pointer}
+.ct-plus.on{background:rgba(61,245,164,.18);color:#3DF5A4}
+.ct-minus{flex:none;width:40px;height:46px;border-radius:12px;border:1px solid var(--line2);background:transparent;color:var(--muted);font-size:20px;cursor:pointer}
+.ct-week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-bottom:6px}
+.ct-d{display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0;border-radius:12px;background:rgba(141,187,255,.05);border:1px solid var(--line);font-size:11px;color:var(--muted)}
+.ct-d b{font-size:12px;color:var(--text);min-height:15px}.ct-d.today{border-color:var(--neon)}.ct-d.full{background:rgba(61,245,164,.14);border-color:rgba(61,245,164,.5)}.ct-d.miss b{color:var(--red)}
+.ct-sub{font-size:12px;letter-spacing:.12em;color:var(--muted);margin:14px 2px 8px;font-weight:800}
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
@@ -1554,7 +1576,7 @@ V.prefs=()=>{
 };
 
 /* ================= Render ================= */
-const ROUTES=['home','body','faith','money','discipline','journal','reports','prefs','setup','coach','progress','share','talk','workouts','sleep','appearance','library'];
+const ROUTES=['home','body','faith','money','discipline','journal','reports','prefs','setup','coach','progress','share','talk','workouts','sleep','appearance','library','content'];
 function render(){
   const app=$('#app');
   let r=UI.route;
@@ -2092,6 +2114,7 @@ function nudges(){
   const wo=c.bodyList.find(i=>i.id==='workout');if(h>=16&&wo&&!bodyDone(wo,TODAY))out.push({kind:'body',id:'workout',text:'Log your workout'});
   if(h>=6&&h<12&&!morningDone(TODAY))out.push({kind:'act',a:'openJournal',v:'m',text:'Write your 3 priorities'});
   if(h>=20&&!eveningDone(TODAY))out.push({kind:'act',a:'openJournal',v:'e',text:'Evening journal'});
+  const cn=ctNudge();if(cn)out.unshift(cn);
   return out;
 }
 function shortLbl(l){return (l.split(/[(,.]/)[0].trim())||l}
@@ -2117,6 +2140,7 @@ HOW YOU TALK
 - Sound like a real person, not a script. Never open with a greeting or his name after the first message, never reuse the same opener, catchphrase or sign-off ("What's good", "Let's get it", "You got this") you already used in this conversation. Jump straight into the answer. Match his energy: chill when he's chill, hyped when he's hyped, short when his message is short. Vary sentence length. React to what he actually said like a friend would, ask a real follow-up question sometimes instead of always giving a next action.
 
 DOING THINGS FOR HIM (use the tools; never just say you did it)
+- Content for Dorani (Reels, trial reels, Stories, TikToks, broadcast, hook videos, carousel, YouTube, shoots): when he says he posted or shot something, call content. If the CONTENT TRACKER shows items left and the deadline is close or passed, tell him straight what's left and to do the next one now. He leaves around the deadline (default 4 PM) but sometimes stays later.
 - He tells you food he ate or will eat ("I had 200 g chicken and 300 g rice") -> estimate grams, kcal, protein, carbs, fat, sodium mg and potassium mg per item from standard nutrition data and call log_food. If he says what is in front of him or sends a meal photo and asks how much to eat, give exact grams that fit his remaining macros; only log it if he says he ate it or asks you to log it.
 - Mistakes -> remove_food with the entry ids shown in the food log.
 - Water, weight, waist, tape measurements (shoulders, chest, each arm, each thigh, calves), steps, sleep, alcohol, salt, face puffiness -> update_day.
@@ -2183,6 +2207,7 @@ function coachContext(){
   L.push(`Bible: ${totalRead()} of ${TOTALCH} chapters; next ${nextUnread(3).map(([b,ch])=>BOOKS[b][0]+' '+ch).join(', ')}. Open prayer requests: ${(c.prayers||[]).filter(x=>!x.answered).length}.`);
   const r=monthMoney(mk(TODAY));L.push(`Money ${monthName(mk(TODAY))}: income ${money(r.inc)} of ${money(c.fin.incomeGoal||0)} goal, spent ${money(r.exp)}, unnecessary ${money(r.waste)}, budget ${money(c.fin.budget||0)}. Unpaid invoices: ${(c.invoices||[]).filter(x=>!x.paid).map(x=>`${x.client} ${money(x.amount)}`).join(', ')||'none'}.`);
   const pr=(d.prio||[]).filter(Boolean);if(pr.length)L.push('Today’s priorities: '+pr.join('; '));
+  if(ctOn())L.push('\nCONTENT TRACKER (daily job, due by the deadline):\n'+ctText(3));
   const ev=B.events.filter(e=>Date.now()-e.t<72*3600e3).slice(-25);if(ev.length)L.push('\nRECENT ACTIVITY (last 72 h, oldest first):\n'+ev.map(evLine).join('\n'));
   const open=B.recs.filter(x=>x.status==='open');if(open.length)L.push('\nOPEN RECOMMENDATIONS:\n'+open.map(x=>`[${x.id}] ${x.date} ${x.area}: ${x.text} | watch: ${x.metric||'-'} | check ${x.check}${x.check<=TODAY?' (DUE: follow up)':''}`).join('\n'));
   if(B.kb.length)L.push('\nKNOWLEDGE BASE topics (lookup research for detail): '+B.kb.map(k=>`${k.topic} [${k.confidence}]`).join('; '));
@@ -2394,12 +2419,13 @@ function lookup(inp){
     case 'activity':out=brain().events.filter(e=>(!inp.from||e.d>=from)&&(!q||e.x.toLowerCase().includes(q)||e.a===q)).slice(-lim).map(evLine).join('\n')||'No activity.';break;
     case 'recommendations':out=brain().recs.slice(-lim).map(r=>`[${r.id}] ${r.date} ${r.area}: ${r.text} | metric: ${r.metric||'-'} | check ${r.check||'-'} | ${r.status}${r.outcome?' — '+r.outcome:''}`).join('\n')||'No recommendations tracked yet.';break;
     case 'research':{const K=brain().kb.filter(k=>!q||`${k.topic} ${k.tags||''} ${k.summary}`.toLowerCase().includes(q)).slice(0,6);out=K.map(k=>`## ${k.topic} (${k.area}, updated ${k.updated}, confidence ${k.confidence})\n${k.summary}\nKey points: ${(k.points||[]).join(' | ')}\nSources: ${(k.sources||[]).map(s=>`${s.title} (${s.year||''}) ${s.url||''} [${s.type||''}]`).join('; ')}`).join('\n\n')||'Nothing in the knowledge base on that yet.';break}
+    case 'content':out=ctText(clamp(+inp.days||7,1,28));break;
     case 'memory':out=c.memory.map(m=>`[${m.id}] ${m.date}: ${m.text}`).join('\n')||'Nothing saved.';break;
     default:throw new Error('Unknown topic');
   }
   return {topic:t,data:String(out).slice(0,8000)};
 }
-const LOOKUP_TOPICS=['day','days','food','workouts','exercise','growth','weights','sleep','photos','checkins','journal','prayers','bible','money','transactions','business','schedule','habits','trends','meal_plan','groceries','goals','activity','recommendations','research','memory'];
+const LOOKUP_TOPICS=['day','days','food','workouts','exercise','growth','weights','sleep','photos','checkins','journal','prayers','bible','money','transactions','business','schedule','habits','trends','meal_plan','groceries','goals','activity','recommendations','research','memory','content'];
 function evLine(e){const dt=new Date(e.t);return `${dowShort(dkey(dt))} ${dt.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'})}${e.d!==dkey(dt)?' (for '+e.d+')':''} [${e.a}] ${e.s==='you'?'Nathan':e.s}: ${e.x}`}
 
 /* ---------- Undo + confirm ---------- */
@@ -2530,16 +2556,18 @@ function coachTools(msg){
   recommendation:{w:1,d:'Track advice so you can follow up. add {text, area, metric (what to watch), check_on (YYYY-MM-DD)}; resolve {id, outcome, worked true/false}.',s:{type:'object',properties:{action:{type:'string',enum:['add','resolve']},id:{type:'string'},text:{type:'string'},area:{type:'string'},metric:{type:'string'},check_on:{type:'string'},outcome:{type:'string'},worked:{type:'boolean'}},required:['action']},
    x(inp){const R=brain().recs;if(inp.action==='add'){if(!inp.text)throw new Error('text needed');const r={id:'r'+uid(),date:TODAY,area:String(inp.area||'general').slice(0,20),text:String(inp.text).slice(0,200),metric:String(inp.metric||'').slice(0,120),check:inp.check_on?dArg(inp.check_on,true):addD(TODAY,14),status:'open',by:AG().name};R.push(r);brain().recs=R.slice(-60);touchQuiet('brain');say('Tracking: '+r.text);return{id:r.id,check_on:r.check}}
      const r=R.find(x=>x.id===inp.id);if(!r)throw new Error('No recommendation with that id');r.status=inp.worked===false?'did not work':inp.worked?'worked':'closed';r.outcome=String(inp.outcome||'').slice(0,200);r.closed=TODAY;touchQuiet('brain');logEvent('goal',`Recommendation ${r.status}: ${r.text}`);say('Closed: '+r.text);return{ok:true}}},
+  content:{w:1,d:'Log Dorani content he posted or shot (content tracker). item = id or name (e.g. d_trial, "trial reels", "tiktok", "b-roll"); add = how many more (default 1) or set = exact count; date for daily items. Weekly items count toward the current week.',s:{type:'object',properties:{item:{type:'string'},add:{type:'number'},set:{type:'number'},date:D},required:['item']},
+   x(inp,ctx){return ctLog(inp,ctx.say)}},
   remember:{w:1,d:'Save a lasting fact or preference about Nathan (about one sentence), or forget one by id.',s:{type:'object',properties:{note:{type:'string'},forget_id:{type:'string'}}},
    x(inp){if(inp.forget_id){S.core.memory=S.core.memory.filter(m=>m.id!==inp.forget_id);saveCore();say('Forgot a note');return{ok:true}}const t=String(inp.note||'').trim().slice(0,200);if(!t)throw new Error('Empty');S.core.memory.push({id:uid(),text:t,date:TODAY});S.core.memory=S.core.memory.slice(-60);saveCore();say('Remembered: '+t);return{ok:true}}},
   };
   const SETS={
-    main:['lookup','log_food','update_day','check_items','log_workout','edit_entries','add_transaction','bible','journal','edit_schedule','remember','recommendation','set_targets','plan_workout','prayer','groceries','meal_plan','business'],
+    main:['lookup','log_food','update_day','check_items','log_workout','edit_entries','add_transaction','bible','journal','edit_schedule','remember','recommendation','set_targets','plan_workout','prayer','groceries','meal_plan','business','content'],
     fuel:['lookup','log_food','edit_entries','update_day','meal_plan','groceries','set_targets','recommendation','remember','check_items'],
     trainer:['lookup','log_workout','plan_workout','edit_entries','update_day','check_items','set_targets','recommendation','remember'],
     faith:['lookup','bible','prayer','journal','check_items','recommendation','remember'],
-    money:['lookup','add_transaction','business','edit_entries','set_targets','recommendation','remember'],
-    mind:['lookup','check_items','edit_schedule','journal','update_day','recommendation','remember','plan_workout'],
+    money:['lookup','add_transaction','business','content','edit_entries','set_targets','recommendation','remember'],
+    mind:['lookup','check_items','content','edit_schedule','journal','update_day','recommendation','remember','plan_workout'],
     glow:['lookup','update_day','check_items','edit_schedule','recommendation','remember'],
   };
   const src=AG().name==='COACH'?'Coach':AG().name[0]+AG().name.slice(1).toLowerCase();
@@ -3131,6 +3159,144 @@ A.salt=el=>{const d=dayW(TODAY);d.saltTsp=Math.max(0,Math.round(((d.saltTsp||0)+
 A.forget=el=>{S.core.memory=S.core.memory.filter(m=>m.id!==el.dataset.id);saveCore();render()};
 
 
+/* ================= Content tracker (Dorani): one simple daily checklist with a deadline ================= */
+// Counts live in the month docs: day.cd = {itemId: count} for daily items, and the Monday of each week
+// holds day.cw = {itemId: count} for weekly items. day.cdl = a later deadline for that day only.
+// Settings live in S.core.content. A target of 0 hides an item.
+const CT_DEFAULT={on:true,name:'Dorani',deadline:'16:00',start:'08:00',
+  daily:[
+    {id:'d_hook',label:'Hook-style trial videos shot',act:'Shoot a hook-style trial video',t:5},
+    {id:'d_trial',label:'Instagram trial reels posted',act:'Post an Instagram trial reel',t:5},
+    {id:'d_reels',label:'Instagram Reels posted',act:'Post an Instagram Reel',t:2},
+    {id:'d_tiktok',label:'TikTok videos posted',act:'Post a TikTok',t:2},
+    {id:'d_stories',label:'Instagram Stories posted',act:'Post an Instagram Story',t:3},
+    {id:'d_bcast',label:'Instagram broadcast update',act:'Send the Instagram broadcast update',t:1},
+  ],
+  weekly:[
+    {id:'w_carousel',g:'publish',label:'Instagram carousel',act:'Post the Instagram carousel',t:1},
+    {id:'w_youtube',g:'publish',label:'YouTube video',act:'Publish the YouTube video',t:1},
+    {id:'s_photo',g:'shoot',who:'Nathan',label:'Photo shoot',act:'Do the photo shoot',t:1},
+    {id:'s_broll',g:'shoot',who:'Nathan',label:'B-roll content shoot',act:'Shoot B-roll content',t:2},
+    {id:'s_hookreels',g:'shoot',who:'Nathan',label:'Hook-driven trial reels shoot',act:'Shoot hook-driven trial reels',t:1},
+    {id:'s_vlog',g:'shoot',who:'Nathan',label:'Vlog shoot',act:'Shoot a vlog',t:2},
+    {id:'s_gym',g:'shoot',who:'Nathan',label:'Gym content shoot',act:'Shoot gym content',t:2},
+    {id:'s_iphone',g:'shoot',who:'Dorani',label:'Self-shot iPhone videos',act:'Get Dorani\'s self-shot iPhone videos',t:3},
+  ]};
+function CT(){const c=S.core;if(!c.content||!Array.isArray(c.content.daily))c.content=JSON.parse(JSON.stringify(CT_DEFAULT));if(!c.content.since)c.content.since=TODAY;return c.content}
+const ctOn=()=>{const c=S.core.content;return !c||c.on!==false};
+const hm2m=t=>{const[h,m]=String(t||'0:0').split(':').map(Number);return h*60+(m||0)};
+const nowMins=()=>{const n=new Date();return n.getHours()*60+n.getMinutes()};
+const fmtLeft=m=>{m=Math.max(0,Math.round(m));const h=Math.floor(m/60),mm=m%60;return h?`${h}h ${pad(mm)}m`:`${mm} min`};
+function ctDeadline(k=TODAY){return dayR(k).cdl||CT().deadline||'16:00'}
+function ctMinsLeft(){return hm2m(ctDeadline(TODAY))-nowMins()}
+function ctCount(id,k=TODAY){return +((dayR(k).cd||{})[id])||0}
+function ctWkCount(id,k=TODAY){return +((dayR(weekStart(k)).cw||{})[id])||0}
+function ctDay(k=TODAY){const L=CT().daily.filter(it=>+it.t>0).map(it=>({it,n:Math.min(ctCount(it.id,k),99),t:+it.t}));
+  const total=L.reduce((s,x)=>s+x.t,0),done=L.reduce((s,x)=>s+Math.min(x.n,x.t),0);
+  return {L,total,done,p:total?done/total:0,left:L.filter(x=>x.n<x.t)}}
+function ctWeek(k=TODAY){const L=CT().weekly.filter(it=>+it.t>0).map(it=>({it,n:ctWkCount(it.id,k),t:+it.t}));
+  const total=L.reduce((s,x)=>s+x.t,0),done=L.reduce((s,x)=>s+Math.min(x.n,x.t),0);return {L,total,done,p:total?done/total:0,left:L.filter(x=>x.n<x.t)}}
+const ctFull=k=>{const D=ctDay(k);return D.total>0&&D.done>=D.total};
+function ctNext(){const D=ctDay();if(D.left.length){const x=D.left[0];return {it:x.it,n:x.n,t:x.t,w:false}}
+  const W=ctWeek();if(W.left.length){const x=W.left[0];return {it:x.it,n:x.n,t:x.t,w:true}}return null}
+const ctShort=l=>l.replace(/ (posted|shot)$/,'').toLowerCase();
+function ctLeftText(D,max=3){return D.left.slice(0,max).map(x=>`${x.t-x.n} ${ctShort(x.it.label)}`).join(', ')+(D.left.length>max?` +${D.left.length-max} more`:'')}
+// Expected progress: a straight line from the start time to the deadline.
+function ctPace(){const s=hm2m(CT().start||'08:00'),e=hm2m(ctDeadline()),n=nowMins();return clamp((n-s)/Math.max(30,e-s),0,1)}
+function ctState(){const D=ctDay(),m=ctMinsLeft();if(D.total&&D.done>=D.total)return 'done';if(m<0)return 'missed';if(m<=60)return 'urgent';if(D.p<ctPace()*.75)return 'behind';return 'ok'}
+function ctNudge(){
+  if(!ctOn())return null;const D=ctDay();if(!D.total||D.done>=D.total)return null;
+  if(nowMins()<hm2m(CT().start||'08:00'))return null;
+  const m=ctMinsLeft(),nx=ctNext(),dl=fmtTime(ctDeadline());
+  if(m<0)return {kind:'act',a:'goContent',text:`Content not finished: ${ctLeftText(D)} left. Do it now`};
+  if(m<=60)return {kind:'act',a:'goContent',text:`${fmtLeft(m)} until ${dl}. Still ${ctLeftText(D)}. Do it now`};
+  return {kind:'act',a:'goContent',text:`Content ${D.done} of ${D.total} by ${dl}. Next: ${lc1(nx.it.act)}`};
+}
+A.goContent=()=>go('content');
+
+function ctDots(n,t){let s='';for(let i=0;i<t;i++)s+=`<i class="${i<n?'on':''}"></i>`;return `<span class="ct-dots" aria-hidden="true">${s}</span>`}
+function ctRow(x,w){const done=x.n>=x.t;return `<div class="ct-row ${done?'done':''}">
+  <div class="ct-main"><b>${esc(x.it.label)}</b><span>${x.it.who?`<em class="ct-who">${esc(x.it.who.toUpperCase())}</em> `:''}${ctDots(Math.min(x.n,x.t),x.t)} ${done?'Done':`${x.n} of ${x.t}${w?' this week':''}`}</span></div>
+  ${x.n>0?`<button class="ct-minus" data-a="ctAdd" data-id="${x.it.id}" ${w?'data-w="1"':''} data-d="-1" aria-label="Undo one ${esc(x.it.label)}">−</button>`:''}
+  <button class="ct-plus ${done?'on':''}" data-a="ctAdd" data-id="${x.it.id}" ${w?'data-w="1"':''} data-d="1" aria-label="Add one ${esc(x.it.label)} (${x.n} of ${x.t})">${done?I.check:'+1'}</button></div>`}
+const ctClock=()=>{const st=ctState(),m=ctMinsLeft(),dl=ctDeadline();return st==='done'?'All done today':m<0?`Deadline ${fmtTime(dl)} passed`:`${fmtLeft(m)} until ${fmtTime(dl)}`};
+
+V.content=()=>{
+  const c=CT(),D=ctDay(),Wk=ctWeek(),st=ctState(),nx=ctNext(),dl=ctDeadline();
+  const ws=weekStart(TODAY),days=weekKeys(ws),full=days.filter(k=>k<=TODAY&&ctFull(k)).length,sk=streak(ctFull);
+  const msg={done:'Every daily post is done. Weekly items below if you have time.',missed:`You didn't finish before ${fmtTime(dl)}. Knock out what's left now.`,urgent:'Under an hour left. Do the next one right now.',behind:'You\'re behind pace. Do the next one right now.',ok:'On pace. Keep going, one at a time.'}[st];
+  const pub=Wk.L.filter(x=>x.it.g==='publish'),sh=Wk.L.filter(x=>x.it.g!=='publish');
+  return `${head(esc((c.name||'Content').toUpperCase())+' CONTENT',`<button class="icon-btn" data-a="ctEdit" aria-label="Edit content tracker">${I.edit}</button>`)}
+  <div class="stack fade-in" style="gap:16px">
+  <section class="card ct-now ${st}">
+    <span class="eyebrow">CREATE · SHOOT · PUBLISH · REPEAT</span><div class="ct-clock" id="ct-clock">${ctClock()}</div>
+    ${nx?`<p class="tiny muted" style="margin:10px 0 2px">DO THIS NOW</p><h2 class="ct-act">${esc(nx.it.act)}</h2><p class="muted small" style="margin:2px 0 10px">${nx.w?'This week':'Today'}: ${nx.n} of ${nx.t} done</p>
+      <button class="btn wide ct-do" data-a="ctAdd" data-id="${nx.it.id}" ${nx.w?'data-w="1"':''} data-d="1">${I.check} Done</button>`
+      :`<h2 class="ct-act">Everything is done this week.</h2>`}
+    <div class="metric" style="margin-top:14px"><div class="top-line"><b>${D.done} of ${D.total} today</b><span>${pct(D.p)}%</span></div>${bar(D.done,D.total,'big')}</div>
+    <p class="small" style="margin:8px 0 0">${msg}</p>
+    ${st!=='done'?`<div class="btn-row"><button class="btn sm ghost" data-a="ctLate">Staying late +1h</button>${dayR(TODAY).cdl?`<button class="btn sm ghost" data-a="ctLate" data-v="reset">Back to ${fmtTime(c.deadline)}</button>`:''}</div>`:''}
+  </section>
+  <section class="card"><div class="card-head"><div class="t"><h2>TODAY</h2></div><span class="muted tiny">tap +1 each time</span></div>
+    <div class="ct-list">${D.L.map(x=>ctRow(x,false)).join('')}</div></section>
+  <section class="card"><div class="card-head"><div class="t"><h2>THIS WEEK</h2></div><span class="muted tiny">${full} of 7 days done${sk>1?` · ${sk}-day streak`:''}</span></div>
+    <div class="ct-week">${days.map(k=>{const P=k<=TODAY&&k>=CT().since?ctDay(k).p:null;return `<div class="ct-d ${k===TODAY?'today':''} ${P===1?'full':P!==null&&k<TODAY?'miss':''}"><b>${P===null?'':pct(P)+'%'}</b><span>${dowShort(k)}</span></div>`}).join('')}</div>
+    <h3 class="ct-sub">PUBLISH</h3><div class="ct-list">${pub.map(x=>ctRow(x,true)).join('')}</div>
+    <h3 class="ct-sub">SHOOTS</h3><div class="ct-list">${sh.map(x=>ctRow(x,true)).join('')}</div></section>
+  ${ctAlertCard()}
+  </div>`;
+};
+A.ctAdd=el=>{const id=el.dataset.id,w=!!el.dataset.w,d=+el.dataset.d||1;
+  if(w){const k=weekStart(TODAY),r=dayW(k);r.cw=r.cw||{};r.cw[id]=Math.max(0,(+r.cw[id]||0)+d);saveDay(k)}
+  else{const r=dayW(TODAY);r.cd=r.cd||{};r.cd[id]=Math.max(0,(+r.cd[id]||0)+d);saveDay(TODAY)}
+  const D=ctDay();if(d>0&&!w&&D.done===D.total)toast('All of today\'s content is done. 🔥');render()};
+A.ctLate=el=>{const r=dayW(TODAY);if(el.dataset.v==='reset')delete r.cdl;else{const t=Math.min(23*60+30,hm2m(ctDeadline())+60);r.cdl=pad(Math.floor(t/60))+':'+pad(t%60)}saveDay(TODAY);toast(el.dataset.v==='reset'?'Deadline reset':`New deadline today: ${fmtTime(r.cdl)}`);render()};
+
+/* Settings: deadline, start, and each item's name and target (0 hides it) */
+SHEETS.ctedit=()=>{const c=CT();const row=(x,w)=>`<div class="row" style="gap:8px"><input class="input" data-ct="label" data-id="${x.id}" value="${esc(x.label)}" aria-label="Name" maxlength="60" style="flex:1"><input class="input" type="number" min="0" max="20" data-ct="t" data-id="${x.id}" value="${x.t}" aria-label="${esc(x.label)} ${w?'per week':'per day'}" style="width:64px"></div>`;
+  return `${sheetHead('Content tracker')}<div class="stack">
+  <div class="row" style="gap:10px"><label class="stack" style="flex:1;gap:4px"><span class="tiny muted">Done by</span><input class="input" type="time" id="ct-deadline" value="${c.deadline}"></label><label class="stack" style="flex:1;gap:4px"><span class="tiny muted">Start reminding at</span><input class="input" type="time" id="ct-start" value="${c.start||'08:00'}"></label></div>
+  <p class="tiny muted">PER DAY (0 hides an item)</p>${c.daily.map(x=>row(x,false)).join('')}
+  <p class="tiny muted">PER WEEK</p>${c.weekly.map(x=>row(x,true)).join('')}
+  <label class="row" style="gap:8px"><input type="checkbox" id="ct-on" ${c.on!==false?'checked':''}> <span>Remind me on the home screen</span></label>
+  <button class="btn wide" data-a="ctSave">Save</button></div>`};
+A.ctEdit=()=>openSheet({type:'ctedit'});
+A.ctSave=()=>{const c=CT();const dl=$('#ct-deadline').value,stt=$('#ct-start').value;if(/^\d\d:\d\d$/.test(dl))c.deadline=dl;if(/^\d\d:\d\d$/.test(stt))c.start=stt;c.on=$('#ct-on').checked;
+  [...document.querySelectorAll('#sheet [data-ct]')].forEach(inp=>{const it=[...c.daily,...c.weekly].find(x=>x.id===inp.dataset.id);if(!it)return;if(inp.dataset.ct==='t')it.t=clamp(Math.round(+inp.value||0),0,20);else if(inp.value.trim())it.label=inp.value.trim().slice(0,60)});
+  saveCore();closeSheet();toast('Saved')};
+
+/* Alerts while the app is open: 60 and 15 minutes before the deadline, and at it. */
+const CT_FIRED=new Set();
+function ctAlertCard(){const can='Notification' in window;const p=can?Notification.permission:'unsupported';
+  if(p==='granted')return `<p class="tiny muted" style="text-align:center">Alerts are on: 1 hour and 15 minutes before your deadline, and at it, while Steadfast is open.</p>`;
+  if(!can||p==='denied')return `<p class="tiny muted" style="text-align:center">Reminders show on your home screen and Coach card.${p==='denied'?' Notifications are blocked for this site in your browser settings.':''}</p>`;
+  return `<button class="btn ghost wide" data-a="ctNotify">Turn on deadline alerts</button>`}
+A.ctNotify=async()=>{try{const r=await Notification.requestPermission();toast(r==='granted'?'Alerts on':'Alerts not allowed')}catch{toast('This browser cannot show alerts')}render()};
+function ctTick(){
+  try{if(!S.core||!S.core.setupDone||!ctOn())return;const el=document.getElementById('ct-clock');if(el)el.textContent=ctClock();
+    const D=ctDay(),m=ctMinsLeft();if(!D.total||D.done>=D.total)return;
+    for(const th of [60,15,0]){const key=TODAY+'|'+ctDeadline()+'|'+th;if(m<=th&&m>th-10&&!CT_FIRED.has(key)){CT_FIRED.add(key);
+      const msg=th?`${fmtLeft(m)} left. Still ${ctLeftText(D)}. Do it now.`:`It's ${fmtTime(ctDeadline())}. You didn't finish: ${ctLeftText(D)}. Do it now.`;
+      toast(msg);
+      try{if('Notification' in window&&Notification.permission==='granted'){const show=()=>new Notification('Content check',{body:msg,tag:'ct-'+th});if(navigator.serviceWorker&&navigator.serviceWorker.controller)navigator.serviceWorker.ready.then(r=>r.showNotification('Content check',{body:msg,tag:'ct-'+th})).catch(show);else show()}}catch{}
+      if(UI.route==='home'||UI.route==='content')render()}}
+  }catch(e){console.warn('content tick',e)}}
+setInterval(ctTick,30000);
+
+/* For the coaches */
+function ctText(days=7){const L=[];const D=ctDay();
+  L.push(`${CT().name} content tracker. Deadline today ${fmtTime(ctDeadline())} (${ctMinsLeft()>=0?fmtLeft(ctMinsLeft())+' left':'passed'}). Today ${D.done}/${D.total}: `+D.L.map(x=>`[${x.it.id}] ${x.it.label} ${x.n}/${x.t}`).join('; '));
+  const W=ctWeek();L.push(`This week (from ${weekStart(TODAY)}): `+W.L.map(x=>`[${x.it.id}] ${x.it.label}${x.it.who?' ('+x.it.who+')':''} ${x.n}/${x.t}`).join('; '));
+  const ks=Array.from({length:days},(_,i)=>addD(TODAY,-i-1)).reverse().filter(k=>k>=CT().since);L.push('Past days: '+(ks.length?'':'none yet (tracker started '+CT().since+')')+ks.map(k=>{const d=ctDay(k);return `${k} ${d.done}/${d.total}${d.left.length?' missed: '+ctLeftText(d,6):''}`}).join(' | '));
+  L.push(`Fully done streak: ${streak(ctFull)} days.`);return L.join('\n')}
+function ctFind(q){const s=String(q||'').toLowerCase().trim();const all=[...CT().daily.map(x=>[x,false]),...CT().weekly.map(x=>[x,true])];
+  return all.find(([x])=>x.id===s)||all.find(([x])=>x.label.toLowerCase()===s)||all.find(([x])=>s&&(x.label.toLowerCase().includes(s)||s.includes(ctShort(x.label))))}
+function ctLog(inp,say){const f=ctFind(inp.item);if(!f)throw new Error('Unknown content item. Use an id: '+[...CT().daily,...CT().weekly].map(x=>x.id).join(', '));
+  const [it,w]=f;const k=w?weekStart(dArg(inp.date)):dArg(inp.date);const r=dayW(k);const key=w?'cw':'cd';r[key]=r[key]||{};
+  const before=+r[key][it.id]||0;const v=inp.set!=null?Math.max(0,Math.round(+inp.set)):Math.max(0,before+Math.round(+inp.add||1));r[key][it.id]=v;saveDay(k);
+  const saved=+(dayR(k)[key]||{})[it.id]||0;if(saved!==v)throw new Error('Save did not stick');
+  say(`${it.label}: ${saved} of ${it.t}${w?' this week':k!==TODAY?' on '+shortDate(k):' today'}`);const D=ctDay(w?TODAY:k);return {item:it.id,count:saved,target:it.t,day_done:D.done,day_total:D.total}}
+
 /* ================= Voice + live face ================= */
 const DEFAULT_FACE='';
 function faceCfg(){return{img:'',idle:'',talk:''}}
@@ -3375,7 +3541,9 @@ function catData(){
   const g=c.groomList||[],gd=g.filter(i=>(d.groom||{})[i.id]).length,fph=brain().photos.find(x=>x.type==='face');
   const gained=cur!=null&&c.goal.startWeight?cur-c.goal.startWeight:null;const ci=(c.checkins||[]).slice(-1)[0];
   const jm=morningDone(TODAY),je=eveningDone(TODAY);
+  const CD=ctDay(),cst=ctState(),cm=ctMinsLeft();
   return [
+    ...(ctOn()&&CD.total?[{k:'content',name:'Content',ic:I.cam,ag:'money',v:`${CD.done}/${CD.total} today`,sub:cst==='done'?'All posted ✓':cm>=0?`${fmtLeft(cm)} to ${fmtTime(ctDeadline())}`:`Deadline ${fmtTime(ctDeadline())} passed`,p:CD.p,warn:cst==='missed'?'Not finished':cst==='urgent'?'Under 1 hour':cst==='behind'?'Behind pace':''}]:[]),
     {k:'body',name:'Body',ic:I.scale,ag:'trainer',v:cur?`${r1(cur)} lb`:(d.weight?d.weight+' lb':'No weigh-in'),sub:cur&&last?`${cur-last>=0?'+':''}${r1(cur-last)} lb this week`:'7-day average',p:gained!=null?clamp(gained/c.goal.gain,0,1):0,warn:h<12&&!d.weight?'Weigh in':''},
     {k:'nutrition',name:'Nutrition',ic:I.fork,ag:'fuel',v:t.kcal?(kl>=0?`${fmt(kl)} kcal left`:`${fmt(-kl)} over`):'Set targets',sub:t.p?(pl>0?`${fmt(pl)} g protein to go`:'Protein hit'):'',p:t.kcal?clamp(T.k/t.kcal,0,1):0,warn:h>=12&&t.kcal&&T.k<t.kcal*exp*.75?'Behind pace':''},
     {k:'workouts',name:'Workouts',ic:CAT_IC.workouts,ag:'trainer',v:wo.length?`Done: ${wo[0].title}`:wp?`Planned: ${wp.title}`:'Nothing planned',sub:`${wk} this week`,p:clamp(wk/5,0,1),warn:wp&&!wo.length&&h>=17?'Not logged yet':''},
@@ -3392,7 +3560,7 @@ function catData(){
 function focusPick(cards){
   const B=brain(),rep=B.reports||{};const today=['evening','morning'].map(k=>rep[k]).filter(x=>x&&x.date===TODAY).sort((a,b)=>b.at-a.at)[0];
   if(today&&today.focusCat)return {k:today.focusCat,text:today.focus,src:today.kind==='morning'?'Morning brief':'Evening review'};
-  const w=cards.filter(x=>x.warn);if(!w.length)return null;const order=['nutrition','workouts','faith','body','sleep','discipline','journal','money','appearance','progress'];
+  const w=cards.filter(x=>x.warn);if(!w.length)return null;const order=['content','nutrition','workouts','faith','body','sleep','discipline','journal','money','appearance','progress'];
   w.sort((a,b)=>order.indexOf(a.k)-order.indexOf(b.k));const x=w[0];return {k:x.k,text:`${x.name}: ${x.warn.toLowerCase()}. ${x.v}${x.sub?', '+x.sub.toLowerCase():''}.`,src:'Right now'};
 }
 function catGrid(){
@@ -3403,7 +3571,7 @@ function catGrid(){
     <b class="cc-name">${x.name.toUpperCase()}</b><span class="cc-v">${esc(x.v)}</span><span class="cc-sub">${esc(x.sub)}</span>
     <span class="cc-bar"><i style="width:${pct(x.p)}%"></i></span></button>`).join('')}</div></section>`;
 }
-A.goCat=el=>{const k=el.dataset.c;const map={library:['library'],body:['body','today'],nutrition:['body','food'],progress:['progress'],workouts:['workouts'],faith:['faith'],money:['money'],discipline:['discipline'],sleep:['sleep'],appearance:['appearance'],journal:['journal']}[k]||['home'];if(map[1])UI.bodyTab=map[1];go(map[0])};
+A.goCat=el=>{const k=el.dataset.c;const map={content:['content'],library:['library'],body:['body','today'],nutrition:['body','food'],progress:['progress'],workouts:['workouts'],faith:['faith'],money:['money'],discipline:['discipline'],sleep:['sleep'],appearance:['appearance'],journal:['journal']}[k]||['home'];if(map[1])UI.bodyTab=map[1];go(map[0])};
 function upNext(){const now=new Date(),hm=pad(now.getHours())+':'+pad(now.getMinutes());const ts=sortedTasks().filter(t=>!taskDone(t,TODAY));const nx=ts.filter(t=>!t.time||t.time>=hm).slice(0,3);const late=ts.filter(t=>t.time&&t.time<hm);
   return `<section class="card"><div class="card-head"><div class="t"><h2>UP NEXT</h2></div><a class="link" href="#discipline">Schedule</a></div>
   ${nx.length?`<div class="checks">${nx.map(t=>ckRow('taskCk',t.id,t.label,false,`<span class="meta">${fmtTime(t.time)}</span>`)).join('')}</div>`:'<div class="empty">Nothing left on today\'s schedule.</div>'}
